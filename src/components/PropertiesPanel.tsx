@@ -1,0 +1,90 @@
+import { Cable, ChevronDown, Network, PanelRightClose, Plus, Trash2, X } from 'lucide-react'
+import { DEVICE_PRESETS } from '../constants/devices'
+import type { DeviceData, DeviceInterface, DeviceType, TopologyEdge, TopologyNode } from '../types/topology'
+
+interface PropertiesPanelProps {
+  selectedNode: TopologyNode | null
+  selectedEdge: TopologyEdge | null
+  nodes: TopologyNode[]
+  collapsed: boolean
+  onToggle: () => void
+  onUpdateNode: (id: string, patch: Partial<DeviceData>, type?: DeviceType) => void
+  onUpdateEdge: (id: string, patch: Partial<NonNullable<TopologyEdge['data']>>) => void
+  onDelete: () => void
+  onCloseSelection: () => void
+  onAddInterface: (nodeId: string) => void
+  onUpdateInterface: (nodeId: string, interfaceId: string, patch: Partial<DeviceInterface>) => void
+  onRemoveInterface: (nodeId: string, interfaceId: string) => void
+}
+
+function Field({ label, value, onChange, placeholder, multiline = false }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; multiline?: boolean }) {
+  return <label className="field"><span>{label}</span>{multiline
+    ? <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={3} />
+    : <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />}</label>
+}
+
+export function PropertiesPanel(props: PropertiesPanelProps) {
+  if (props.collapsed) return null
+  const { selectedNode, selectedEdge } = props
+  const source = selectedEdge ? props.nodes.find((n) => n.id === selectedEdge.source) : undefined
+  const target = selectedEdge ? props.nodes.find((n) => n.id === selectedEdge.target) : undefined
+  return (
+    <aside className="sidebar properties-panel" aria-label="Properties panel">
+      <div className="panel-heading">
+        <div><p className="eyebrow">Inspector</p><h2>Properties</h2></div>
+        <button className="icon-button" onClick={props.onToggle} title="Collapse properties"><PanelRightClose size={17} /></button>
+      </div>
+
+      {!selectedNode && !selectedEdge && (
+        <div className="no-selection"><Network size={30} /><h3>Nothing selected</h3><p>Select a device or connection to edit its details.</p></div>
+      )}
+
+      {selectedNode && (
+        <div className="inspector-scroll">
+          <div className="selection-header">
+            <span className="selection-icon" style={{ color: DEVICE_PRESETS[selectedNode.data.deviceType].accent }}><Network size={19} /></span>
+            <div><strong>{selectedNode.data.name || 'Unnamed device'}</strong><small>{DEVICE_PRESETS[selectedNode.data.deviceType].label}</small></div>
+            <button className="icon-button" onClick={props.onCloseSelection} title="Clear selection"><X size={16} /></button>
+          </div>
+          <section className="property-section">
+            <h3>Device details</h3>
+            <Field label="Device name" value={selectedNode.data.name} onChange={(name) => props.onUpdateNode(selectedNode.id, { name })} placeholder="e.g. FGT-HQ" />
+            <label className="field"><span>Device type</span><div className="select-wrap"><select value={selectedNode.data.deviceType} onChange={(e) => props.onUpdateNode(selectedNode.id, { deviceType: e.target.value as DeviceType }, e.target.value as DeviceType)}>{(Object.keys(DEVICE_PRESETS) as DeviceType[]).map((type) => <option key={type} value={type}>{DEVICE_PRESETS[type].label}</option>)}</select><ChevronDown size={15} /></div></label>
+            <Field label="Hostname" value={selectedNode.data.hostname} onChange={(hostname) => props.onUpdateNode(selectedNode.id, { hostname })} placeholder="e.g. FGT-HQ" />
+            <Field label="Management IP" value={selectedNode.data.managementIp} onChange={(managementIp) => props.onUpdateNode(selectedNode.id, { managementIp })} placeholder="192.168.1.99/24" />
+            <Field label="Subnet mask / CIDR" value={selectedNode.data.subnet} onChange={(subnet) => props.onUpdateNode(selectedNode.id, { subnet })} placeholder="255.255.255.0 or /24" />
+            <Field label="Description" value={selectedNode.data.description} onChange={(description) => props.onUpdateNode(selectedNode.id, { description })} placeholder="Purpose or location" multiline />
+          </section>
+          <section className="property-section interfaces-section">
+            <div className="section-title"><div><h3>Interfaces</h3><span>{selectedNode.data.interfaces.length} configured</span></div><button className="button button--small" onClick={() => props.onAddInterface(selectedNode.id)}><Plus size={15} /> Add</button></div>
+            {selectedNode.data.interfaces.length === 0 && <p className="empty-note">No interfaces configured.</p>}
+            {selectedNode.data.interfaces.map((item, index) => (
+              <div className="interface-card" key={item.id}>
+                <div className="interface-card__title"><span>Interface {index + 1}</span><button onClick={() => props.onRemoveInterface(selectedNode.id, item.id)} title="Remove interface"><Trash2 size={15} /></button></div>
+                <div className="two-col"><Field label="Name" value={item.name} onChange={(name) => props.onUpdateInterface(selectedNode.id, item.id, { name })} placeholder="port1" /><Field label="Role" value={item.role} onChange={(role) => props.onUpdateInterface(selectedNode.id, item.id, { role })} placeholder="LAN" /></div>
+                <Field label="IP / CIDR" value={item.ip} onChange={(ip) => props.onUpdateInterface(selectedNode.id, item.id, { ip })} placeholder="192.168.1.1/24" />
+                <Field label="VLAN ID" value={item.vlan} onChange={(vlan) => props.onUpdateInterface(selectedNode.id, item.id, { vlan })} placeholder="10" />
+                <Field label="Description" value={item.description} onChange={(description) => props.onUpdateInterface(selectedNode.id, item.id, { description })} placeholder="Uplink to core" />
+              </div>
+            ))}
+          </section>
+          <button className="danger-button" onClick={props.onDelete}><Trash2 size={16} /> Delete device</button>
+        </div>
+      )}
+
+      {selectedEdge && (
+        <div className="inspector-scroll">
+          <div className="selection-header"><span className="selection-icon"><Cable size={19} /></span><div><strong>Connection</strong><small>{source?.data.name ?? 'Source'} → {target?.data.name ?? 'Target'}</small></div><button className="icon-button" onClick={props.onCloseSelection}><X size={16} /></button></div>
+          <section className="property-section">
+            <h3>Connection details</h3>
+            <Field label={`Source interface · ${source?.data.name ?? ''}`} value={selectedEdge.data?.sourceInterface ?? ''} onChange={(sourceInterface) => props.onUpdateEdge(selectedEdge.id, { sourceInterface })} placeholder="port1" />
+            <Field label={`Destination interface · ${target?.data.name ?? ''}`} value={selectedEdge.data?.targetInterface ?? ''} onChange={(targetInterface) => props.onUpdateEdge(selectedEdge.id, { targetInterface })} placeholder="Gi0/1" />
+            <Field label="Description" value={selectedEdge.data?.description ?? ''} onChange={(description) => props.onUpdateEdge(selectedEdge.id, { description })} placeholder="Primary uplink" multiline />
+          </section>
+          <div className="connection-summary"><span className="dot" /><span>{source?.data.name ?? 'Source'}</span><span className="line" /><span>{target?.data.name ?? 'Target'}</span></div>
+          <button className="danger-button" onClick={props.onDelete}><Trash2 size={16} /> Delete connection</button>
+        </div>
+      )}
+    </aside>
+  )
+}
