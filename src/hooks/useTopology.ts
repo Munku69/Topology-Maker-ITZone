@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { addEdge, applyEdgeChanges, applyNodeChanges, type Connection, type EdgeChange, type NodeChange } from '@xyflow/react'
 import { createDeviceData, newId } from '../constants/devices'
+import { getCableStyle } from '../constants/cables'
 import { loadProject, saveProject } from '../utils/project'
 import type { ConnectionData, DeviceData, DeviceInterface, DeviceType, SaveState, TopologyEdge, TopologyNode, TopologyProject } from '../types/topology'
 
@@ -47,9 +48,10 @@ export function useTopology() {
     if (removedIds.size) setEdges((current) => current.filter((edge) => !removedIds.has(edge.source) && !removedIds.has(edge.target)))
   }, [])
   const onEdgesChange = useCallback((changes: EdgeChange<TopologyEdge>[]) => setEdges((current) => applyEdgeChanges(changes, current)), [])
-  const onConnect = useCallback((connection: Connection) => {
-    const data: ConnectionData = { sourceInterface: '', targetInterface: '', description: '' }
-    setEdges((current) => addEdge({ ...connection, id: newId('edge'), type: 'smoothstep', data }, current))
+  const addConnection = useCallback((connection: Connection, data: ConnectionData) => {
+    const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
+    const label = [interfaceLabel, data.description].filter(Boolean).join(' — ')
+    setEdges((current) => addEdge({ ...connection, id: newId('edge'), type: 'smoothstep', data, label, style: getCableStyle(data.cableType) }, current))
   }, [])
 
   const addDevice = useCallback((type: DeviceType, position: { x: number; y: number }) => {
@@ -80,10 +82,10 @@ export function useTopology() {
   const updateEdge = useCallback((id: string, patch: Partial<ConnectionData>) => {
     setEdges((current) => current.map((edge) => {
       if (edge.id !== id) return edge
-      const data = { sourceInterface: '', targetInterface: '', description: '', ...edge.data, ...patch }
+      const data: ConnectionData = { cableType: 'copper-straight', sourceInterface: '', targetInterface: '', description: '', ...edge.data, ...patch }
       const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
       const label = [interfaceLabel, data.description].filter(Boolean).join(' — ')
-      return { ...edge, data, label }
+      return { ...edge, data, label, style: getCableStyle(data.cableType) }
     }))
   }, [])
 
@@ -112,5 +114,5 @@ export function useTopology() {
 
   const saveNow = useCallback(() => { saveProject(getProject()); setSaveState('saved') }, [getProject])
 
-  return { nodes, edges, projectName, saveState, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, onConnect, addDevice, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, clearSelection, replaceProject, newProject, saveNow, getProject }
+  return { nodes, edges, projectName, saveState, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, addDevice, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, clearSelection, replaceProject, newProject, saveNow, getProject }
 }

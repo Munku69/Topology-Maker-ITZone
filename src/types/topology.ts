@@ -2,6 +2,8 @@ import type { Edge, Node } from '@xyflow/react'
 
 export const DEVICE_TYPES = ['firewall', 'router', 'switch', 'pc', 'server'] as const
 export type DeviceType = (typeof DEVICE_TYPES)[number]
+export const CABLE_TYPES = ['copper-straight', 'copper-crossover', 'fiber', 'serial'] as const
+export type CableType = (typeof CABLE_TYPES)[number]
 
 export interface DeviceInterface {
   id: string
@@ -23,6 +25,7 @@ export interface DeviceData extends Record<string, unknown> {
 }
 
 export interface ConnectionData extends Record<string, unknown> {
+  cableType: CableType
   sourceInterface: string
   targetInterface: string
   description: string

@@ -1,6 +1,7 @@
 import { Cable, ChevronDown, Network, PanelRightClose, Plus, Trash2, X } from 'lucide-react'
 import { DEVICE_PRESETS } from '../constants/devices'
-import type { DeviceData, DeviceInterface, DeviceType, TopologyEdge, TopologyNode } from '../types/topology'
+import { CABLE_PRESETS } from '../constants/cables'
+import type { CableType, DeviceData, DeviceInterface, DeviceType, TopologyEdge, TopologyNode } from '../types/topology'
 
 interface PropertiesPanelProps {
   selectedNode: TopologyNode | null
@@ -21,6 +22,15 @@ function Field({ label, value, onChange, placeholder, multiline = false }: { lab
   return <label className="field"><span>{label}</span>{multiline
     ? <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={3} />
     : <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />}</label>
+}
+
+function PortField({ label, value, interfaces, onChange }: { label: string; value: string; interfaces: DeviceInterface[]; onChange: (value: string) => void }) {
+  const valueExists = interfaces.some((item) => item.name === value)
+  return <label className="field"><span>{label}</span><div className="select-wrap"><select value={value} onChange={(event) => onChange(event.target.value)}>
+    <option value="">Unassigned</option>
+    {value && !valueExists && <option value={value}>{value} (saved)</option>}
+    {interfaces.map((item) => <option key={item.id} value={item.name}>{item.name || 'Unnamed interface'}{item.role ? ` · ${item.role}` : ''}{item.ip ? ` · ${item.ip}` : ''}</option>)}
+  </select><ChevronDown size={15} /></div></label>
 }
 
 export function PropertiesPanel(props: PropertiesPanelProps) {
@@ -77,8 +87,9 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
           <div className="selection-header"><span className="selection-icon"><Cable size={19} /></span><div><strong>Connection</strong><small>{source?.data.name ?? 'Source'} → {target?.data.name ?? 'Target'}</small></div><button className="icon-button" onClick={props.onCloseSelection}><X size={16} /></button></div>
           <section className="property-section">
             <h3>Connection details</h3>
-            <Field label={`Source interface · ${source?.data.name ?? ''}`} value={selectedEdge.data?.sourceInterface ?? ''} onChange={(sourceInterface) => props.onUpdateEdge(selectedEdge.id, { sourceInterface })} placeholder="port1" />
-            <Field label={`Destination interface · ${target?.data.name ?? ''}`} value={selectedEdge.data?.targetInterface ?? ''} onChange={(targetInterface) => props.onUpdateEdge(selectedEdge.id, { targetInterface })} placeholder="Gi0/1" />
+            <label className="field"><span>Cable type</span><div className="select-wrap"><select value={selectedEdge.data?.cableType ?? 'copper-straight'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { cableType: event.target.value as CableType })}>{(Object.keys(CABLE_PRESETS) as CableType[]).map((type) => <option key={type} value={type}>{CABLE_PRESETS[type].label}</option>)}</select><ChevronDown size={15} /></div></label>
+            <PortField label={`Source interface · ${source?.data.name ?? ''}`} value={selectedEdge.data?.sourceInterface ?? ''} interfaces={source?.data.interfaces ?? []} onChange={(sourceInterface) => props.onUpdateEdge(selectedEdge.id, { sourceInterface })} />
+            <PortField label={`Destination interface · ${target?.data.name ?? ''}`} value={selectedEdge.data?.targetInterface ?? ''} interfaces={target?.data.interfaces ?? []} onChange={(targetInterface) => props.onUpdateEdge(selectedEdge.id, { targetInterface })} />
             <Field label="Description" value={selectedEdge.data?.description ?? ''} onChange={(description) => props.onUpdateEdge(selectedEdge.id, { description })} placeholder="Primary uplink" multiline />
           </section>
           <div className="connection-summary"><span className="dot" /><span>{source?.data.name ?? 'Source'}</span><span className="line" /><span>{target?.data.name ?? 'Target'}</span></div>

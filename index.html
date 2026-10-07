@@ -5,10 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#07101d" />
     <meta name="description" content="A private, browser-based network topology diagram editor." />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/itzone.png" />
+    <link rel="apple-touch-icon" href="/itzone.png" />
     <title>Network Topology Builder</title>
   </head>
   <body>
+    <script>
+      (() => {
+        const saved = localStorage.getItem('network-topology-theme')
+        const theme = saved === 'dark' || saved === 'light'
+          ? saved
+          : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+        document.documentElement.dataset.theme = theme
+        document.documentElement.style.colorScheme = theme
+      })()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

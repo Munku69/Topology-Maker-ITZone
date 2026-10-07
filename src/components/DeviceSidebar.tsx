@@ -1,15 +1,20 @@
-import { Flame, GripVertical, Network, PanelLeftClose, Server, SquareTerminal, Waypoints } from 'lucide-react'
+import { Activity, Cable, Flame, GripVertical, Network, PanelLeftClose, Radio, Server, Shuffle, SquareTerminal, Waypoints } from 'lucide-react'
 import { DEVICE_PRESETS } from '../constants/devices'
-import type { DeviceType } from '../types/topology'
+import { CABLE_PRESETS } from '../constants/cables'
+import type { CableType, DeviceType } from '../types/topology'
 
 const icons = { firewall: Flame, router: Waypoints, switch: Network, pc: SquareTerminal, server: Server }
+const cableIcons = { 'copper-straight': Cable, 'copper-crossover': Shuffle, fiber: Activity, serial: Radio }
 
 interface DeviceSidebarProps {
   collapsed: boolean
   onToggle: () => void
+  selectedCable: CableType | null
+  cableStartLabel: string | null
+  onSelectCable: (type: CableType) => void
 }
 
-export function DeviceSidebar({ collapsed, onToggle }: DeviceSidebarProps) {
+export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable }: DeviceSidebarProps) {
   if (collapsed) return null
   const onDragStart = (event: React.DragEvent, type: DeviceType) => {
     event.dataTransfer.setData('application/reactflow', type)
@@ -42,9 +47,26 @@ export function DeviceSidebar({ collapsed, onToggle }: DeviceSidebarProps) {
           )
         })}
       </div>
+      <div className="cable-section">
+        <div className="cable-section__heading"><div><p className="eyebrow">Connections</p><h3>Cables</h3></div>{selectedCable && <span className="tool-active">ACTIVE</span>}</div>
+        <p className="panel-help cable-help">Choose a cable, then click each device and select its port.</p>
+        <div className="cable-list">
+          {(Object.keys(CABLE_PRESETS) as CableType[]).map((type) => {
+            const preset = CABLE_PRESETS[type]
+            const Icon = cableIcons[type]
+            const active = selectedCable === type
+            return <button key={type} className={`cable-tool ${active ? 'is-active' : ''}`} style={{ '--cable-color': preset.color } as React.CSSProperties} onClick={() => onSelectCable(type)} title={preset.label}>
+              <span className="cable-tool__line" />
+              <Icon size={17} />
+              <span><strong>{preset.shortLabel}</strong><small>{preset.description}</small></span>
+            </button>
+          })}
+        </div>
+        {selectedCable && <div className="cable-progress"><span className={cableStartLabel ? 'is-complete' : ''}>1</span><p>{cableStartLabel ? `${cableStartLabel} selected` : 'Click the first device'}</p><i /><span>2</span><p>Click the second device</p></div>}
+      </div>
       <div className="library-tip">
         <span className="tip-key">TIP</span>
-        <p>Connect devices by dragging between the small handles on each card.</p>
+        <p>Press Escape at any time to cancel the active cable operation.</p>
       </div>
     </aside>
   )

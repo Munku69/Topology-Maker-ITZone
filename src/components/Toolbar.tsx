@@ -1,5 +1,6 @@
-import { ChevronDown, Cloud, Download, FileDown, FileJson, FilePlus2, FolderUp, ImageDown, Menu, PanelRight, Save } from 'lucide-react'
+import { ChevronDown, Download, FileDown, FileJson, FilePlus2, FolderUp, ImageDown, Menu, Moon, PanelRight, Save, Sun } from 'lucide-react'
 import type { SaveState } from '../types/topology'
+import type { Theme } from '../hooks/useTheme'
 
 interface ToolbarProps {
   projectName: string
@@ -17,16 +18,15 @@ interface ToolbarProps {
   onToggleLeft: () => void
   onToggleRight: () => void
   exporting: boolean
+  theme: Theme
+  onToggleTheme: () => void
 }
 
 export function Toolbar(props: ToolbarProps) {
   return (
     <header className="toolbar">
-      <div className="brand-block">
-        {props.leftCollapsed && <button className="icon-button toolbar-panel-button" onClick={props.onToggleLeft} title="Open device library"><Menu size={18} /></button>}
-        <span className="brand-mark"><Cloud size={21} /></span>
-        <div className="brand-copy"><span>Network Topology</span><small>Builder</small></div>
-      </div>
+      {props.leftCollapsed && <button className="icon-button toolbar-panel-button" onClick={props.onToggleLeft} title="Open device library"><Menu size={18} /></button>}
+      <div className="brand-logo" aria-label="ITZone"><img src="/itzone.png" alt="ITZone" /></div>
       <div className="project-title-wrap">
         <span className="project-label">PROJECT</span>
         <input aria-label="Project name" value={props.projectName} onChange={(e) => props.onProjectNameChange(e.target.value)} />
@@ -45,6 +45,9 @@ export function Toolbar(props: ToolbarProps) {
         </div>
         <button className="toolbar-button demo-button" onClick={props.onLoadDemo}>Load example</button>
       </nav>
+      <button className="icon-button theme-toggle" onClick={props.onToggleTheme} title={`Switch to ${props.theme === 'dark' ? 'light' : 'dark'} mode`} aria-label={`Switch to ${props.theme === 'dark' ? 'light' : 'dark'} mode`}>
+        {props.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+      </button>
       <div className={`save-status save-status--${props.saveState}`}><span />{props.saveState === 'saved' ? 'Saved locally' : props.saveState === 'saving' ? 'Saving…' : 'Unsaved changes'}</div>
       {props.rightCollapsed && <button className="icon-button toolbar-panel-button" onClick={props.onToggleRight} title="Open properties"><PanelRight size={18} /></button>}
     </header>

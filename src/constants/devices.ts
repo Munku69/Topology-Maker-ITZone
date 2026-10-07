@@ -1,4 +1,5 @@
-import type { DeviceData, DeviceInterface, DeviceType, TopologyEdge, TopologyNode } from '../types/topology'
+import type { CableType, DeviceData, DeviceInterface, DeviceType, TopologyEdge, TopologyNode } from '../types/topology'
+import { getCableStyle } from './cables'
 
 export interface DevicePreset {
   type: DeviceType
@@ -29,6 +30,8 @@ export const DEVICE_PRESETS: Record<DeviceType, DevicePreset> = {
     defaultInterfaces: [
       { name: 'Gi0/1', ip: '', vlan: '', role: 'Trunk', description: '' },
       { name: 'Gi0/2', ip: '', vlan: '', role: 'Access', description: '' },
+      { name: 'Fa0/1', ip: '', vlan: '', role: 'Access', description: '' },
+      { name: 'Fa0/2', ip: '', vlan: '', role: 'Access', description: '' },
     ],
   },
   pc: {
@@ -72,13 +75,15 @@ export function createDemoTopology(): { nodes: TopologyNode[]; edges: TopologyEd
     makeNode('demo-pc', 'pc', 160, 650, { name: 'PC-01', hostname: 'PC-01', managementIp: '192.168.1.100/24' }),
     makeNode('demo-server', 'server', 600, 650, { name: 'WEB-SRV', hostname: 'WEB-SRV', managementIp: '192.168.1.10/24' }),
   ]
-  const makeEdge = (id: string, source: string, target: string, sourceInterface: string, targetInterface: string): TopologyEdge => ({
+  const makeEdge = (id: string, source: string, target: string, sourceInterface: string, targetInterface: string, cableType: CableType = 'copper-straight'): TopologyEdge => ({
     id, source, target, type: 'smoothstep', animated: false,
-    data: { sourceInterface, targetInterface, description: '' },
+    sourceHandle: 'bottom', targetHandle: 'top',
+    data: { cableType, sourceInterface, targetInterface, description: '' },
     label: [sourceInterface, targetInterface].filter(Boolean).join('  ·  '),
+    style: getCableStyle(cableType),
   })
   return { nodes, edges: [
-    makeEdge('demo-edge-1', 'demo-internet', 'demo-fw', 'WAN', 'port2'),
+    makeEdge('demo-edge-1', 'demo-internet', 'demo-fw', 'Gi0/0', 'port2'),
     makeEdge('demo-edge-2', 'demo-fw', 'demo-switch', 'port1', 'Gi0/1'),
     makeEdge('demo-edge-3', 'demo-switch', 'demo-pc', 'Fa0/1', 'eth0'),
     makeEdge('demo-edge-4', 'demo-switch', 'demo-server', 'Fa0/2', 'eth0'),

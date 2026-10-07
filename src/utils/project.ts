@@ -1,5 +1,6 @@
-import type { TopologyProject } from '../types/topology'
-import { DEVICE_TYPES } from '../types/topology'
+import type { CableType, ConnectionData, TopologyProject } from '../types/topology'
+import { CABLE_TYPES, DEVICE_TYPES } from '../types/topology'
+import { getCableStyle } from '../constants/cables'
 
 export const STORAGE_KEY = 'network-topology-project'
 
@@ -40,19 +41,39 @@ export function validateProject(value: unknown): TopologyProject {
     }
   }
   const nodeIds = new Set(project.nodes.map((node) => node.id))
+  const validCableTypes = new Set<string>(CABLE_TYPES)
   for (const edge of project.edges) {
     if (!edge || typeof edge.id !== 'string' || typeof edge.source !== 'string' || typeof edge.target !== 'string' || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
       throw new Error('The project contains an invalid connection.')
     }
     if (edge.data && (typeof edge.data.sourceInterface !== 'string' || typeof edge.data.targetInterface !== 'string' || typeof edge.data.description !== 'string')) throw new Error('A connection has invalid properties.')
+    if (edge.data?.cableType !== undefined && !validCableTypes.has(String(edge.data.cableType))) throw new Error('A connection has an invalid cable type.')
   }
+  const edges = project.edges.map((edge) => {
+    const cableType: CableType = edge.data?.cableType && validCableTypes.has(edge.data.cableType) ? edge.data.cableType : 'copper-straight'
+    const data: ConnectionData = {
+      cableType,
+      sourceInterface: edge.data?.sourceInterface ?? '',
+      targetInterface: edge.data?.targetInterface ?? '',
+      description: edge.data?.description ?? '',
+    }
+    return {
+      ...edge,
+      type: edge.type ?? 'smoothstep',
+      sourceHandle: edge.sourceHandle ?? 'right',
+      targetHandle: edge.targetHandle ?? 'left',
+      data,
+      label: [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ '),
+      style: getCableStyle(cableType),
+    }
+  })
   return {
     version: 1,
     projectName: project.projectName,
     createdAt: typeof project.createdAt === 'string' ? project.createdAt : new Date().toISOString(),
     updatedAt: typeof project.updatedAt === 'string' ? project.updatedAt : new Date().toISOString(),
     nodes: project.nodes,
-    edges: project.edges,
+    edges,
   }
 }
 

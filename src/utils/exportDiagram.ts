@@ -20,8 +20,9 @@ async function renderCompleteDiagram(nodes: TopologyNode[]): Promise<RenderedDia
   const width = Math.round(rawWidth * scale)
   const height = Math.round(rawHeight * scale)
   const { x, y, zoom } = getViewportForBounds(bounds, width, height, 0.05, 2, 0.12)
+  const backgroundColor = document.documentElement.dataset.theme === 'light' ? '#eef3f7' : '#07101d'
   const dataUrl = await toPng(viewport, {
-    backgroundColor: '#07101d',
+    backgroundColor,
     width,
     height,
     pixelRatio: 2,
