@@ -1,14 +1,26 @@
-import type { CableType, ConnectionData, TopologyProject } from '../types/topology'
+import type { CableType, ConnectionData, StoredTopologyProject, TopologyProject } from '../types/topology'
 import { CABLE_TYPES, DEVICE_TYPES } from '../types/topology'
 import { getCableStyle } from '../constants/cables'
 
 export const STORAGE_KEY = 'network-topology-project'
+export const PROJECT_LIBRARY_KEY = 'network-topology-projects'
 
-export function saveProject(project: TopologyProject): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(project))
+export interface ProjectLibrary {
+  version: 1
+  activeProjectId: string
+  projects: StoredTopologyProject[]
 }
 
-export function loadProject(): TopologyProject | null {
+export function newProjectId(): string {
+  return typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `project-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+export function createBlankProject(projectName = 'Untitled Network'): StoredTopologyProject {
+  const now = new Date().toISOString()
+  return { id: newProjectId(), version: 1, projectName, createdAt: now, updatedAt: now, nodes: [], edges: [] }
+}
+
+function loadLegacyProject(): TopologyProject | null {
   const value = localStorage.getItem(STORAGE_KEY)
   if (!value) return null
   try {
@@ -17,6 +29,38 @@ export function loadProject(): TopologyProject | null {
   } catch {
     return null
   }
+}
+
+export function saveProjectLibrary(library: ProjectLibrary): void {
+  localStorage.setItem(PROJECT_LIBRARY_KEY, JSON.stringify(library))
+}
+
+export function loadProjectLibrary(): ProjectLibrary {
+  const value = localStorage.getItem(PROJECT_LIBRARY_KEY)
+  if (value) {
+    try {
+      const parsed = JSON.parse(value) as Partial<ProjectLibrary>
+      if (parsed.version === 1 && Array.isArray(parsed.projects)) {
+        const projects = parsed.projects.flatMap((item) => {
+          if (!item || typeof item.id !== 'string') return []
+          try { return [{ id: item.id, ...validateProject(item) }] }
+          catch { return [] }
+        })
+        if (projects.length) {
+          const activeProjectId = projects.some((project) => project.id === parsed.activeProjectId) ? parsed.activeProjectId! : projects[0]!.id
+          return { version: 1, activeProjectId, projects }
+        }
+      }
+    } catch {
+      // Fall through to legacy migration or a new blank project.
+    }
+  }
+
+  const legacy = loadLegacyProject()
+  const project = legacy ? { id: newProjectId(), ...legacy } : createBlankProject()
+  const library: ProjectLibrary = { version: 1, activeProjectId: project.id, projects: [project] }
+  saveProjectLibrary(library)
+  return library
 }
 
 export function validateProject(value: unknown): TopologyProject {

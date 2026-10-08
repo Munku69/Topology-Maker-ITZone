@@ -1,9 +1,9 @@
-import { Activity, Cable, Flame, GripVertical, Network, PanelLeftClose, Radio, Server, Shuffle, SquareTerminal, Waypoints } from 'lucide-react'
-import { DEVICE_PRESETS } from '../constants/devices'
+import { useState } from 'react'
+import { Activity, Cable, ChevronDown, PanelLeftClose, Radio, Shuffle } from 'lucide-react'
+import { DEVICE_GROUPS, DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_PRESETS } from '../constants/cables'
-import type { CableType, DeviceType } from '../types/topology'
+import type { CableType, DeviceCategory, DeviceType } from '../types/topology'
 
-const icons = { firewall: Flame, router: Waypoints, switch: Network, pc: SquareTerminal, server: Server }
 const cableIcons = { 'copper-straight': Cable, 'copper-crossover': Shuffle, fiber: Activity, serial: Radio }
 
 interface DeviceSidebarProps {
@@ -12,10 +12,18 @@ interface DeviceSidebarProps {
   selectedCable: CableType | null
   cableStartLabel: string | null
   onSelectCable: (type: CableType) => void
+  portSelection: boolean
 }
 
-export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable }: DeviceSidebarProps) {
+export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, portSelection }: DeviceSidebarProps) {
+  const [openGroups, setOpenGroups] = useState<Set<DeviceCategory>>(() => new Set(['network']))
   if (collapsed) return null
+  const toggleGroup = (category: DeviceCategory) => setOpenGroups((current) => {
+    const next = new Set(current)
+    if (next.has(category)) next.delete(category)
+    else next.add(category)
+    return next
+  })
   const onDragStart = (event: React.DragEvent, type: DeviceType) => {
     event.dataTransfer.setData('application/reactflow', type)
     event.dataTransfer.effectAllowed = 'move'
@@ -27,29 +35,29 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
         <button className="icon-button" onClick={onToggle} title="Collapse device library"><PanelLeftClose size={17} /></button>
       </div>
       <p className="panel-help">Drag a device onto the canvas to add it.</p>
-      <div className="device-list">
-        {(Object.keys(DEVICE_PRESETS) as DeviceType[]).map((type) => {
-          const preset = DEVICE_PRESETS[type]
-          const Icon = icons[type]
-          return (
-            <button
-              key={type}
-              draggable
-              onDragStart={(event) => onDragStart(event, type)}
-              className="library-device"
-              style={{ '--device-accent': preset.accent } as React.CSSProperties}
-              title={`Drag ${preset.label} to canvas`}
-            >
-              <span className="library-device__icon"><Icon size={20} /></span>
-              <span className="library-device__copy"><strong>{preset.label}</strong><small>{preset.description}</small></span>
-              <GripVertical size={16} className="grip" />
+      <div className="device-groups">
+        {DEVICE_GROUPS.map((group) => {
+          const open = openGroups.has(group.id)
+          return <section className="device-group" key={group.id}>
+            <button className="device-group__header" onClick={() => toggleGroup(group.id)} aria-expanded={open}>
+              <span><strong>{group.label}</strong><small>{group.types.length} devices</small></span>
+              <ChevronDown size={15} className={open ? 'is-open' : ''} />
             </button>
-          )
+            {open && <div className="device-grid">
+              {group.types.map((type) => {
+                const preset = DEVICE_PRESETS[type]
+                return <button key={type} draggable onDragStart={(event) => onDragStart(event, type)} className="device-tile" style={{ '--device-accent': preset.accent } as React.CSSProperties} title={`${preset.label} · ${preset.description}`}>
+                  <span className="device-art"><img src={preset.iconPath} alt="" draggable={false} /></span>
+                  <strong>{preset.label}</strong>
+                </button>
+              })}
+            </div>}
+          </section>
         })}
       </div>
       <div className="cable-section">
         <div className="cable-section__heading"><div><p className="eyebrow">Connections</p><h3>Cables</h3></div>{selectedCable && <span className="tool-active">ACTIVE</span>}</div>
-        <p className="panel-help cable-help">Choose a cable, then click each device and select its port.</p>
+        <p className="panel-help cable-help">{portSelection ? 'Choose a cable, then click each device and select its port.' : 'Choose a cable, then click the two devices you want to connect.'}</p>
         <div className="cable-list">
           {(Object.keys(CABLE_PRESETS) as CableType[]).map((type) => {
             const preset = CABLE_PRESETS[type]

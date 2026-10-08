@@ -16,6 +16,7 @@ interface PropertiesPanelProps {
   onAddInterface: (nodeId: string) => void
   onUpdateInterface: (nodeId: string, interfaceId: string, patch: Partial<DeviceInterface>) => void
   onRemoveInterface: (nodeId: string, interfaceId: string) => void
+  portSelection: boolean
 }
 
 function Field({ label, value, onChange, placeholder, multiline = false }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; multiline?: boolean }) {
@@ -52,7 +53,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
       {selectedNode && (
         <div className="inspector-scroll">
           <div className="selection-header">
-            <span className="selection-icon" style={{ color: DEVICE_PRESETS[selectedNode.data.deviceType].accent }}><Network size={19} /></span>
+            <span className="selection-icon device-art" style={{ color: DEVICE_PRESETS[selectedNode.data.deviceType].accent }}><img src={DEVICE_PRESETS[selectedNode.data.deviceType].iconPath} alt="" /></span>
             <div><strong>{selectedNode.data.name || 'Unnamed device'}</strong><small>{DEVICE_PRESETS[selectedNode.data.deviceType].label}</small></div>
             <button className="icon-button" onClick={props.onCloseSelection} title="Clear selection"><X size={16} /></button>
           </div>
@@ -88,10 +89,13 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
           <section className="property-section">
             <h3>Connection details</h3>
             <label className="field"><span>Cable type</span><div className="select-wrap"><select value={selectedEdge.data?.cableType ?? 'copper-straight'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { cableType: event.target.value as CableType })}>{(Object.keys(CABLE_PRESETS) as CableType[]).map((type) => <option key={type} value={type}>{CABLE_PRESETS[type].label}</option>)}</select><ChevronDown size={15} /></div></label>
-            <PortField label={`Source interface · ${source?.data.name ?? ''}`} value={selectedEdge.data?.sourceInterface ?? ''} interfaces={source?.data.interfaces ?? []} onChange={(sourceInterface) => props.onUpdateEdge(selectedEdge.id, { sourceInterface })} />
-            <PortField label={`Destination interface · ${target?.data.name ?? ''}`} value={selectedEdge.data?.targetInterface ?? ''} interfaces={target?.data.interfaces ?? []} onChange={(targetInterface) => props.onUpdateEdge(selectedEdge.id, { targetInterface })} />
+            {props.portSelection ? <>
+              <PortField label={`Source interface · ${source?.data.name ?? ''}`} value={selectedEdge.data?.sourceInterface ?? ''} interfaces={source?.data.interfaces ?? []} onChange={(sourceInterface) => props.onUpdateEdge(selectedEdge.id, { sourceInterface })} />
+              <PortField label={`Destination interface · ${target?.data.name ?? ''}`} value={selectedEdge.data?.targetInterface ?? ''} interfaces={target?.data.interfaces ?? []} onChange={(targetInterface) => props.onUpdateEdge(selectedEdge.id, { targetInterface })} />
+            </> : <p className="feature-disabled-note">Port assignment is off. Enable <strong>Choose ports</strong> in Features to edit endpoint ports.</p>}
             <Field label="Description" value={selectedEdge.data?.description ?? ''} onChange={(description) => props.onUpdateEdge(selectedEdge.id, { description })} placeholder="Primary uplink" multiline />
           </section>
+          <p className="feature-disabled-note">Drag either highlighted cable endpoint on the canvas to move it along a device outline.</p>
           <div className="connection-summary"><span className="dot" /><span>{source?.data.name ?? 'Source'}</span><span className="line" /><span>{target?.data.name ?? 'Target'}</span></div>
           <button className="danger-button" onClick={props.onDelete}><Trash2 size={16} /> Delete connection</button>
         </div>

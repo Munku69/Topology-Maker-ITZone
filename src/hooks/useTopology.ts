@@ -2,36 +2,57 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { addEdge, applyEdgeChanges, applyNodeChanges, type Connection, type EdgeChange, type NodeChange } from '@xyflow/react'
 import { createDeviceData, newId } from '../constants/devices'
 import { getCableStyle } from '../constants/cables'
-import { loadProject, saveProject } from '../utils/project'
-import type { ConnectionData, DeviceData, DeviceInterface, DeviceType, SaveState, TopologyEdge, TopologyNode, TopologyProject } from '../types/topology'
-
-function initialProject(): TopologyProject {
-  return loadProject() ?? { version: 1, projectName: 'Untitled Network', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), nodes: [], edges: [] }
-}
+import { createBlankProject, loadProjectLibrary, newProjectId, saveProjectLibrary, type ProjectLibrary } from '../utils/project'
+import type { ConnectionData, DeviceData, DeviceInterface, DeviceType, ProjectSummary, SaveState, StoredTopologyProject, TopologyEdge, TopologyNode, TopologyProject } from '../types/topology'
 
 export function useTopology() {
-  const initial = useRef(initialProject()).current
-  const [nodes, setNodes] = useState<TopologyNode[]>(initial.nodes)
-  const [edges, setEdges] = useState<TopologyEdge[]>(initial.edges)
-  const [projectName, setProjectNameState] = useState(initial.projectName)
-  const [createdAt, setCreatedAt] = useState(initial.createdAt)
+  const initialLibrary = useRef(loadProjectLibrary()).current
+  const initialProject = initialLibrary.projects.find((project) => project.id === initialLibrary.activeProjectId) ?? initialLibrary.projects[0]!
+  const [activeProjectId, setActiveProjectId] = useState(initialProject.id)
+  const [projects, setProjects] = useState<StoredTopologyProject[]>(initialLibrary.projects)
+  const [nodes, setNodes] = useState<TopologyNode[]>(initialProject.nodes)
+  const [edges, setEdges] = useState<TopologyEdge[]>(initialProject.edges)
+  const [projectName, setProjectNameState] = useState(initialProject.projectName)
+  const [createdAt, setCreatedAt] = useState(initialProject.createdAt)
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const firstRender = useRef(true)
+  const skipNextAutosave = useRef(false)
+  const activeProjectIdRef = useRef(initialProject.id)
+  const projectsRef = useRef(initialLibrary.projects)
 
   const getProject = useCallback((): TopologyProject => ({
     version: 1, projectName: projectName.trim() || 'Untitled Network', createdAt, updatedAt: new Date().toISOString(), nodes, edges,
   }), [createdAt, edges, nodes, projectName])
 
+  const writeLibrary = useCallback((nextProjects: StoredTopologyProject[], nextActiveProjectId = activeProjectIdRef.current) => {
+    const library: ProjectLibrary = { version: 1, activeProjectId: nextActiveProjectId, projects: nextProjects }
+    projectsRef.current = nextProjects
+    activeProjectIdRef.current = nextActiveProjectId
+    setProjects(nextProjects)
+    setActiveProjectId(nextActiveProjectId)
+    saveProjectLibrary(library)
+  }, [])
+
+  const persistCurrent = useCallback((project = getProject()) => {
+    const stored: StoredTopologyProject = { id: activeProjectIdRef.current, ...project, updatedAt: new Date().toISOString() }
+    const nextProjects = projectsRef.current.some((item) => item.id === stored.id)
+      ? projectsRef.current.map((item) => item.id === stored.id ? stored : item)
+      : [...projectsRef.current, stored]
+    writeLibrary(nextProjects, stored.id)
+    return stored
+  }, [getProject, writeLibrary])
+
   useEffect(() => {
     if (firstRender.current) { firstRender.current = false; return }
+    if (skipNextAutosave.current) { skipNextAutosave.current = false; return }
     setSaveState('unsaved')
     const timer = window.setTimeout(() => {
       setSaveState('saving')
-      saveProject(getProject())
+      persistCurrent()
       setSaveState('saved')
     }, 550)
     return () => window.clearTimeout(timer)
-  }, [getProject])
+  }, [persistCurrent])
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -89,6 +110,27 @@ export function useTopology() {
     }))
   }, [])
 
+  const reconnectConnection = useCallback((oldEdge: TopologyEdge, connection: Connection) => {
+    setEdges((current) => current.map((edge) => {
+      if (edge.id !== oldEdge.id) return edge
+      const existing: ConnectionData = {
+        cableType: 'copper-straight',
+        sourceInterface: '',
+        targetInterface: '',
+        description: '',
+        ...edge.data,
+      }
+      const data: ConnectionData = {
+        ...existing,
+        sourceInterface: edge.source === connection.source ? edge.data?.sourceInterface ?? '' : '',
+        targetInterface: edge.target === connection.target ? edge.data?.targetInterface ?? '' : '',
+      }
+      const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
+      const label = [interfaceLabel, data.description].filter(Boolean).join(' — ')
+      return { ...edge, ...connection, data, label }
+    }))
+  }, [])
+
   const deleteSelection = useCallback(() => {
     const selectedNodeIds = new Set(nodes.filter((node) => node.selected).map((node) => node.id))
     setNodes((current) => current.filter((node) => !node.selected))
@@ -107,12 +149,88 @@ export function useTopology() {
     setEdges(project.edges.map((edge) => ({ ...edge, selected: false })))
   }, [])
 
-  const newProject = useCallback(() => {
-    const now = new Date().toISOString()
-    setProjectNameState('Untitled Network'); setCreatedAt(now); setNodes([]); setEdges([])
+  const loadIntoEditor = useCallback((project: StoredTopologyProject) => {
+    skipNextAutosave.current = true
+    setProjectNameState(project.projectName)
+    setCreatedAt(project.createdAt)
+    setNodes(project.nodes.map((node) => ({ ...node, selected: false })))
+    setEdges(project.edges.map((edge) => ({ ...edge, selected: false })))
+    setSaveState('saved')
   }, [])
 
-  const saveNow = useCallback(() => { saveProject(getProject()); setSaveState('saved') }, [getProject])
+  const switchProject = useCallback((id: string) => {
+    if (id === activeProjectIdRef.current) return true
+    persistCurrent()
+    const target = projectsRef.current.find((project) => project.id === id)
+    if (!target) return false
+    writeLibrary(projectsRef.current, target.id)
+    loadIntoEditor(target)
+    return true
+  }, [loadIntoEditor, persistCurrent, writeLibrary])
 
-  return { nodes, edges, projectName, saveState, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, addDevice, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, clearSelection, replaceProject, newProject, saveNow, getProject }
+  const createProject = useCallback((name = 'Untitled Network') => {
+    persistCurrent()
+    const project = createBlankProject(name.trim() || 'Untitled Network')
+    writeLibrary([...projectsRef.current, project], project.id)
+    loadIntoEditor(project)
+    return project.id
+  }, [loadIntoEditor, persistCurrent, writeLibrary])
+
+  const renameProject = useCallback((id: string, name: string) => {
+    const projectName = name.trim() || 'Untitled Network'
+    const now = new Date().toISOString()
+    let nextProjects: StoredTopologyProject[]
+    if (id === activeProjectIdRef.current) {
+      const current: StoredTopologyProject = { id, ...getProject(), projectName, updatedAt: now }
+      nextProjects = projectsRef.current.map((project) => project.id === id ? current : project)
+      setProjectNameState(projectName)
+    } else {
+      nextProjects = projectsRef.current.map((project) => project.id === id ? { ...project, projectName, updatedAt: now } : project)
+    }
+    writeLibrary(nextProjects)
+  }, [getProject, writeLibrary])
+
+  const duplicateProject = useCallback((id: string) => {
+    if (id === activeProjectIdRef.current) persistCurrent()
+    const source = projectsRef.current.find((project) => project.id === id)
+    if (!source) return null
+    const now = new Date().toISOString()
+    const duplicate: StoredTopologyProject = {
+      id: newProjectId(),
+      version: 1,
+      projectName: `${source.projectName} Copy`,
+      createdAt: now,
+      updatedAt: now,
+      nodes: structuredClone(source.nodes).map((node) => ({ ...node, selected: false })),
+      edges: structuredClone(source.edges).map((edge) => ({ ...edge, selected: false })),
+    }
+    writeLibrary([...projectsRef.current, duplicate], duplicate.id)
+    loadIntoEditor(duplicate)
+    return duplicate.id
+  }, [loadIntoEditor, persistCurrent, writeLibrary])
+
+  const deleteProject = useCallback((id: string) => {
+    if (id !== activeProjectIdRef.current) persistCurrent()
+    let remaining = projectsRef.current.filter((project) => project.id !== id)
+    if (!remaining.length) remaining = [createBlankProject()]
+    if (id === activeProjectIdRef.current) {
+      const nextActive = [...remaining].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!
+      writeLibrary(remaining, nextActive.id)
+      loadIntoEditor(nextActive)
+    } else {
+      writeLibrary(remaining)
+    }
+  }, [loadIntoEditor, persistCurrent, writeLibrary])
+
+  const projectSummaries: ProjectSummary[] = projects.map((project) => ({
+    id: project.id,
+    projectName: project.projectName,
+    updatedAt: project.updatedAt,
+    deviceCount: project.nodes.length,
+    connectionCount: project.edges.length,
+  })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+
+  const saveNow = useCallback(() => { persistCurrent(); setSaveState('saved') }, [persistCurrent])
+
+  return { nodes, edges, projectName, activeProjectId, projects: projectSummaries, saveState, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, reconnectConnection, addDevice, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, clearSelection, replaceProject, switchProject, createProject, renameProject, duplicateProject, deleteProject, saveNow, getProject }
 }

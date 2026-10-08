@@ -4,6 +4,7 @@ import { ConfirmDialog } from './components/ConfirmDialog'
 import { DeviceSidebar } from './components/DeviceSidebar'
 import { PortSelectionDialog } from './components/PortSelectionDialog'
 import { PropertiesPanel } from './components/PropertiesPanel'
+import { ProjectManagerDialog } from './components/ProjectManagerDialog'
 import { Toasts, type ToastKind, type ToastMessage } from './components/Toast'
 import { Toolbar } from './components/Toolbar'
 import { TopologyCanvas } from './components/TopologyCanvas'
@@ -11,22 +12,26 @@ import { createDemoTopology } from './constants/devices'
 import { CABLE_PRESETS } from './constants/cables'
 import { useTopology } from './hooks/useTopology'
 import { useTheme } from './hooks/useTheme'
-import type { CableType, DeviceType, TopologyEdge, TopologyNode, TopologyProject } from './types/topology'
+import { useFeatureSettings } from './hooks/useFeatureSettings'
+import { DEVICE_TYPES, type CableType, type DeviceType, type ProjectSummary, type TopologyEdge, type TopologyNode, type TopologyProject } from './types/topology'
 import { downloadJson, validateProject } from './utils/project'
 
-type PendingAction = { type: 'new' } | { type: 'demo' } | { type: 'import'; project: TopologyProject }
-type CableEndpoint = { nodeId: string; interfaceName: string }
-type PortPrompt = { nodeId: string; stage: 'first' | 'second' }
+type PendingAction = { type: 'demo' } | { type: 'import'; project: TopologyProject }
+type CableEndpoint = { nodeId: string; interfaceName: string; handleId: string }
+type PortPrompt = { nodeId: string; stage: 'first' | 'second'; handleId: string }
 
 function App() {
   const topology = useTopology()
   const { theme, toggleTheme } = useTheme()
+  const { settings, setFeature } = useFeatureSettings()
   const [flow, setFlow] = useState<ReactFlowInstance<TopologyNode, TopologyEdge> | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  const [projectManagerOpen, setProjectManagerOpen] = useState(false)
+  const [projectToDelete, setProjectToDelete] = useState<ProjectSummary | null>(null)
   const [selectedCable, setSelectedCable] = useState<CableType | null>(null)
   const [cableEndpoint, setCableEndpoint] = useState<CableEndpoint | null>(null)
   const [portPrompt, setPortPrompt] = useState<PortPrompt | null>(null)
@@ -51,12 +56,12 @@ function App() {
   const notify = useCallback((kind: ToastKind, message: string) => {
     const id = Date.now() + Math.random()
     setToasts((current) => [...current, { id, kind, message }])
-    window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), 4200)
+  }, [])
+  const dismissToast = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id))
   }, [])
 
-  const hasWork = topology.nodes.length > 0 || topology.edges.length > 0 || topology.projectName !== 'Untitled Network'
   const runPending = useCallback((action: PendingAction) => {
-    if (action.type === 'new') { topology.newProject(); notify('success', 'New project ready.') }
     if (action.type === 'demo') {
       const demo = createDemoTopology()
       topology.replaceProject({ version: 1, projectName: 'Head Office Network', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...demo })
@@ -71,7 +76,7 @@ function App() {
     setSelectedNodeId(null); setSelectedEdgeId(null); setPendingAction(null); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null)
   }, [flow, notify, topology])
 
-  const requestAction = (action: PendingAction) => hasWork ? setPendingAction(action) : runPending(action)
+  const requestAction = (action: PendingAction) => setPendingAction(action)
 
   const onImportFile = async (file: File | undefined) => {
     if (!file) return
@@ -106,6 +111,17 @@ function App() {
 
   const clearSelection = () => { topology.clearSelection(); setSelectedNodeId(null); setSelectedEdgeId(null) }
   const deleteSelection = () => { topology.deleteSelection(); setSelectedNodeId(null); setSelectedEdgeId(null); notify('info', selectedNode ? 'Device and connected links deleted.' : 'Connection deleted.') }
+  const resetWorkspaceInteraction = () => {
+    setSelectedNodeId(null); setSelectedEdgeId(null); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null)
+  }
+  const fitCurrentProject = () => window.setTimeout(() => flow?.fitView({ padding: 0.2, duration: 350 }), 80)
+  const createLocalProject = (name = 'Untitled Network') => {
+    topology.createProject(name)
+    resetWorkspaceInteraction()
+    setProjectManagerOpen(false)
+    fitCurrentProject()
+    notify('success', `Created “${name.trim() || 'Untitled Network'}”.`)
+  }
 
   const selectCableTool = (type: CableType) => {
     if (selectedCable === type) {
@@ -118,43 +134,55 @@ function App() {
     notify('info', `${CABLE_PRESETS[type].label} selected. Click the first device.`)
   }
 
-  const handleCableNodeClick = (node: TopologyNode) => {
-    if (!selectedCable) return
-    clearSelection()
-    if (cableEndpoint?.nodeId === node.id) {
-      notify('error', 'Choose a different device for the other end of the cable.')
-      return
-    }
-    setPortPrompt({ nodeId: node.id, stage: cableEndpoint ? 'second' : 'first' })
-  }
-
-  const confirmCablePort = (interfaceName: string) => {
-    if (!selectedCable || !portPromptNode || !portPrompt) return
-    if (portPrompt.stage === 'first') {
-      setCableEndpoint({ nodeId: portPromptNode.id, interfaceName })
-      setPortPrompt(null)
-      notify('info', `${portPromptNode.data.name} ${interfaceName} selected. Click the second device.`)
-      return
-    }
-    if (!cableEndpoint) return
+  const connectCableToNode = (targetNode: TopologyNode, targetInterface: string, targetHandleId: string) => {
+    if (!selectedCable || !cableEndpoint) return
     const sourceNode = topology.nodes.find((node) => node.id === cableEndpoint.nodeId)
     if (!sourceNode) {
       setCableEndpoint(null); setPortPrompt(null)
       notify('error', 'The first device is no longer available. Start the cable again.')
       return
     }
-    const deltaX = portPromptNode.position.x - sourceNode.position.x
-    const deltaY = portPromptNode.position.y - sourceNode.position.y
-    const vertical = Math.abs(deltaY) > Math.abs(deltaX)
     const connection: Connection = {
       source: sourceNode.id,
-      target: portPromptNode.id,
-      sourceHandle: vertical ? deltaY >= 0 ? 'bottom' : 'source-top' : deltaX >= 0 ? 'right' : 'source-left',
-      targetHandle: vertical ? deltaY >= 0 ? 'top' : 'target-bottom' : deltaX >= 0 ? 'left' : 'target-right',
+      target: targetNode.id,
+      sourceHandle: cableEndpoint.handleId,
+      targetHandle: targetHandleId,
     }
-    topology.addConnection(connection, { cableType: selectedCable, sourceInterface: cableEndpoint.interfaceName, targetInterface: interfaceName, description: '' })
-    notify('success', `${CABLE_PRESETS[selectedCable].shortLabel}: ${sourceNode.data.name} ${cableEndpoint.interfaceName} connected to ${portPromptNode.data.name} ${interfaceName}.`)
+    topology.addConnection(connection, { cableType: selectedCable, sourceInterface: cableEndpoint.interfaceName, targetInterface, description: '' })
+    const sourceLabel = [sourceNode.data.name, cableEndpoint.interfaceName].filter(Boolean).join(' ')
+    const targetLabel = [targetNode.data.name, targetInterface].filter(Boolean).join(' ')
+    notify('success', `${CABLE_PRESETS[selectedCable].shortLabel}: ${sourceLabel} connected to ${targetLabel}.`)
     setCableEndpoint(null); setPortPrompt(null)
+  }
+
+  const handleCableNodeClick = (node: TopologyNode, handleId: string) => {
+    if (!selectedCable) return
+    clearSelection()
+    if (cableEndpoint?.nodeId === node.id) {
+      notify('error', 'Choose a different device for the other end of the cable.')
+      return
+    }
+    if (!settings.portSelection) {
+      if (!cableEndpoint) {
+        setCableEndpoint({ nodeId: node.id, interfaceName: '', handleId })
+        notify('info', `${node.data.name} selected. Click the second device.`)
+      } else {
+        connectCableToNode(node, '', handleId)
+      }
+      return
+    }
+    setPortPrompt({ nodeId: node.id, stage: cableEndpoint ? 'second' : 'first', handleId })
+  }
+
+  const confirmCablePort = (interfaceName: string) => {
+    if (!selectedCable || !portPromptNode || !portPrompt) return
+    if (portPrompt.stage === 'first') {
+      setCableEndpoint({ nodeId: portPromptNode.id, interfaceName, handleId: portPrompt.handleId })
+      setPortPrompt(null)
+      notify('info', `${portPromptNode.data.name} ${interfaceName} selected. Click the second device.`)
+      return
+    }
+    connectCableToNode(portPromptNode, interfaceName, portPrompt.handleId)
   }
 
   useEffect(() => {
@@ -180,10 +208,10 @@ function App() {
       }, { signal: lifecycle.signal })
       await context.registerTool({
         name: 'add_network_device', title: 'Add network device', description: 'Add a network device to the visible topology canvas.',
-        inputSchema: { type: 'object', properties: { type: { type: 'string', enum: ['firewall', 'router', 'switch', 'pc', 'server'] }, x: { type: 'number' }, y: { type: 'number' } }, required: ['type'], additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: false },
+        inputSchema: { type: 'object', properties: { type: { type: 'string', enum: DEVICE_TYPES }, x: { type: 'number' }, y: { type: 'number' } }, required: ['type'], additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: false },
         execute: (input: unknown) => {
           const value = input as { type?: DeviceType; x?: number; y?: number }
-          if (!value.type || !['firewall', 'router', 'switch', 'pc', 'server'].includes(value.type)) throw new Error('A valid device type is required.')
+          if (!value.type || !DEVICE_TYPES.includes(value.type)) throw new Error('A valid device type is required.')
           const id = topology.addDevice(value.type, { x: value.x ?? 240, y: value.y ?? 180 })
           return { id, type: value.type, added: true }
         },
@@ -195,14 +223,16 @@ function App() {
 
   return (
     <div className={`app-shell ${leftCollapsed ? 'left-collapsed' : ''} ${rightCollapsed ? 'right-collapsed' : ''}`}>
-      <Toolbar projectName={topology.projectName} saveState={topology.saveState} leftCollapsed={leftCollapsed} rightCollapsed={rightCollapsed} onProjectNameChange={topology.setProjectName} onNew={() => requestAction({ type: 'new' })} onSave={() => { topology.saveNow(); notify('success', 'Project saved locally.') }} onImport={() => fileInputRef.current?.click()} onExportJson={() => { downloadJson(topology.getProject()); notify('success', 'Editable project downloaded.') }} onExportPdf={() => void performExport('pdf')} onExportPng={() => void performExport('png')} onLoadDemo={() => requestAction({ type: 'demo' })} onToggleLeft={() => setLeftCollapsed(false)} onToggleRight={() => setRightCollapsed(false)} exporting={exporting} theme={theme} onToggleTheme={toggleTheme} />
-      <DeviceSidebar collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(true)} selectedCable={selectedCable} cableStartLabel={cableStartNode ? `${cableStartNode.data.name} ${cableEndpoint?.interfaceName ?? ''}` : null} onSelectCable={selectCableTool} />
-      <TopologyCanvas ref={canvasRef} nodes={topology.nodes} edges={topology.edges} onNodesChange={topology.onNodesChange} onEdgesChange={topology.onEdgesChange} onInit={setFlow} onSelectionChange={onSelectionChange} onNodeClick={handleCableNodeClick} cableMode={Boolean(selectedCable)} cableStatus={selectedCable ? cableEndpoint ? `${CABLE_PRESETS[selectedCable].shortLabel}: click the second device` : `${CABLE_PRESETS[selectedCable].shortLabel}: click the first device` : null} onDropDevice={(type, point) => { if (!flow) return; const position = flow.screenToFlowPosition(point); const id = topology.addDevice(type, position); setSelectedNodeId(id); setSelectedEdgeId(null) }} />
-      <PropertiesPanel nodes={topology.nodes} selectedNode={selectedNode} selectedEdge={selectedEdge} collapsed={rightCollapsed} onToggle={() => setRightCollapsed(true)} onUpdateNode={topology.updateNode} onUpdateEdge={topology.updateEdge} onAddInterface={topology.addInterface} onUpdateInterface={topology.updateInterface} onRemoveInterface={topology.removeInterface} onDelete={deleteSelection} onCloseSelection={clearSelection} />
+      <Toolbar projectName={topology.projectName} saveState={topology.saveState} leftCollapsed={leftCollapsed} rightCollapsed={rightCollapsed} onProjectNameChange={topology.setProjectName} onManageProjects={() => setProjectManagerOpen(true)} onNew={() => createLocalProject()} onSave={() => { topology.saveNow(); notify('success', 'Project saved locally.') }} onImport={() => fileInputRef.current?.click()} onExportJson={() => { downloadJson(topology.getProject()); notify('success', 'Editable project downloaded.') }} onExportPdf={() => void performExport('pdf')} onExportPng={() => void performExport('png')} onLoadDemo={() => requestAction({ type: 'demo' })} onToggleLeft={() => setLeftCollapsed(false)} onToggleRight={() => setRightCollapsed(false)} exporting={exporting} theme={theme} onToggleTheme={toggleTheme} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onShowCablesChange={(value) => { setFeature('showCables', value); if (!value) clearSelection(); notify('info', value ? 'Cables are visible.' : 'Cables are hidden.') }} onPortSelectionChange={(value) => { setFeature('portSelection', value); setCableEndpoint(null); setPortPrompt(null); notify('info', value ? 'Port selection enabled.' : 'Port selection disabled.') }} onShowDeviceLabelsChange={(value) => { setFeature('showDeviceLabels', value); notify('info', value ? 'Device labels are visible.' : 'Device labels are hidden.') }} />
+      <DeviceSidebar collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(true)} selectedCable={selectedCable} cableStartLabel={cableStartNode ? `${cableStartNode.data.name} ${cableEndpoint?.interfaceName ?? ''}` : null} onSelectCable={selectCableTool} portSelection={settings.portSelection} />
+      <TopologyCanvas ref={canvasRef} nodes={topology.nodes} edges={topology.edges} onNodesChange={topology.onNodesChange} onEdgesChange={topology.onEdgesChange} onInit={setFlow} onSelectionChange={onSelectionChange} onNodeClick={handleCableNodeClick} onReconnect={topology.reconnectConnection} cableMode={Boolean(selectedCable)} cableStatus={selectedCable ? cableEndpoint ? `${CABLE_PRESETS[selectedCable].shortLabel}: click the second device` : `${CABLE_PRESETS[selectedCable].shortLabel}: click the first device` : null} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onDropDevice={(type, point) => { if (!flow) return; const position = flow.screenToFlowPosition(point); const id = topology.addDevice(type, position); setSelectedNodeId(id); setSelectedEdgeId(null) }} />
+      <PropertiesPanel nodes={topology.nodes} selectedNode={selectedNode} selectedEdge={selectedEdge} collapsed={rightCollapsed} onToggle={() => setRightCollapsed(true)} onUpdateNode={topology.updateNode} onUpdateEdge={topology.updateEdge} onAddInterface={topology.addInterface} onUpdateInterface={topology.updateInterface} onRemoveInterface={topology.removeInterface} onDelete={deleteSelection} onCloseSelection={clearSelection} portSelection={settings.portSelection} />
       <input ref={fileInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => void onImportFile(event.target.files?.[0])} />
-      <ConfirmDialog open={Boolean(pendingAction)} title={pendingAction?.type === 'new' ? 'Start a new project?' : pendingAction?.type === 'demo' ? 'Load the example topology?' : 'Replace the current project?'} message="This action will replace the current canvas. Export JSON first if you want to keep a portable copy." confirmLabel={pendingAction?.type === 'new' ? 'Start new project' : pendingAction?.type === 'demo' ? 'Load example' : 'Import project'} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && runPending(pendingAction)} />
-      <PortSelectionDialog node={portPromptNode} stage={portPrompt?.stage ?? 'first'} cableType={selectedCable} usedInterfaces={usedInterfaces} onCancel={() => setPortPrompt(null)} onConfirm={confirmCablePort} />
-      <Toasts toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
+      <ProjectManagerDialog open={projectManagerOpen} projects={topology.projects} activeProjectId={topology.activeProjectId} onClose={() => setProjectManagerOpen(false)} onCreate={createLocalProject} onSwitch={(id) => { if (topology.switchProject(id)) { resetWorkspaceInteraction(); setProjectManagerOpen(false); fitCurrentProject(); notify('success', 'Project opened.') } }} onRename={(id, name) => { topology.renameProject(id, name); notify('success', 'Project renamed.') }} onDuplicate={(id) => { const duplicateId = topology.duplicateProject(id); if (duplicateId) { resetWorkspaceInteraction(); setProjectManagerOpen(false); fitCurrentProject(); notify('success', 'Project duplicated.') } }} onDelete={(project) => { setProjectManagerOpen(false); setProjectToDelete(project) }} />
+      <ConfirmDialog open={Boolean(pendingAction)} title="Are you sure?" message={pendingAction?.type === 'demo' ? 'Loading the example will replace every device and cable on the current project.' : 'Importing this file will replace every device and cable on the current project.'} confirmLabel={pendingAction?.type === 'demo' ? 'Load example' : 'Replace and import'} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && runPending(pendingAction)} />
+      <ConfirmDialog open={Boolean(projectToDelete)} title="Delete this project?" message={`“${projectToDelete?.projectName ?? ''}” will be removed from this browser. Export it as JSON first if you may need it later.`} confirmLabel="Delete project" onCancel={() => { setProjectToDelete(null); setProjectManagerOpen(true) }} onConfirm={() => { if (!projectToDelete) return; const name = projectToDelete.projectName; topology.deleteProject(projectToDelete.id); setProjectToDelete(null); resetWorkspaceInteraction(); fitCurrentProject(); notify('info', `Deleted “${name}”.`) }} />
+      <PortSelectionDialog node={settings.portSelection ? portPromptNode : null} stage={portPrompt?.stage ?? 'first'} cableType={selectedCable} usedInterfaces={usedInterfaces} onCancel={() => setPortPrompt(null)} onConfirm={confirmCablePort} />
+      <Toasts toasts={toasts} onDismiss={dismissToast} />
       {exporting && <div className="export-overlay"><span className="spinner" /><strong>Preparing complete topology…</strong></div>}
     </div>
   )
