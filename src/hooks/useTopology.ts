@@ -137,6 +137,15 @@ export function useTopology() {
     setEdges((current) => current.filter((edge) => !edge.selected && !selectedNodeIds.has(edge.source) && !selectedNodeIds.has(edge.target)))
   }, [nodes])
 
+  const deleteNode = useCallback((id: string) => {
+    setNodes((current) => current.filter((node) => node.id !== id))
+    setEdges((current) => current.filter((edge) => edge.source !== id && edge.target !== id))
+  }, [])
+
+  const deleteEdge = useCallback((id: string) => {
+    setEdges((current) => current.filter((edge) => edge.id !== id))
+  }, [])
+
   const clearSelection = useCallback(() => {
     setNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node))
     setEdges((current) => current.map((edge) => edge.selected ? { ...edge, selected: false } : edge))
@@ -232,5 +241,5 @@ export function useTopology() {
 
   const saveNow = useCallback(() => { persistCurrent(); setSaveState('saved') }, [persistCurrent])
 
-  return { nodes, edges, projectName, activeProjectId, projects: projectSummaries, saveState, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, reconnectConnection, addDevice, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, clearSelection, replaceProject, switchProject, createProject, renameProject, duplicateProject, deleteProject, saveNow, getProject }
+  return { nodes, edges, projectName, activeProjectId, projects: projectSummaries, saveState, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, reconnectConnection, addDevice, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, deleteNode, deleteEdge, clearSelection, replaceProject, switchProject, createProject, renameProject, duplicateProject, deleteProject, saveNow, getProject }
 }

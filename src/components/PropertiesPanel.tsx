@@ -17,6 +17,7 @@ interface PropertiesPanelProps {
   onUpdateInterface: (nodeId: string, interfaceId: string, patch: Partial<DeviceInterface>) => void
   onRemoveInterface: (nodeId: string, interfaceId: string) => void
   portSelection: boolean
+  onResizeStart: (event: React.PointerEvent) => void
 }
 
 function Field({ label, value, onChange, placeholder, multiline = false }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; multiline?: boolean }) {
@@ -41,6 +42,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   const target = selectedEdge ? props.nodes.find((n) => n.id === selectedEdge.target) : undefined
   return (
     <aside className="sidebar properties-panel" aria-label="Properties panel">
+      <div className="panel-resizer panel-resizer--properties" role="separator" aria-orientation="vertical" aria-label="Resize properties panel" onPointerDown={props.onResizeStart} />
       <div className="panel-heading">
         <div><p className="eyebrow">Inspector</p><h2>Properties</h2></div>
         <button className="icon-button" onClick={props.onToggle} title="Collapse properties"><PanelRightClose size={17} /></button>

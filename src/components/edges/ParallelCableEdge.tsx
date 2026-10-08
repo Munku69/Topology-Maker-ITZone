@@ -1,7 +1,11 @@
-import { BaseEdge, Position, type EdgeProps } from '@xyflow/react'
-import type { TopologyEdge } from '../../types/topology'
+import { BaseEdge, Position, useInternalNode, type EdgeProps } from '@xyflow/react'
+import type { TopologyEdge, TopologyNode } from '../../types/topology'
 
 interface Point { x: number; y: number }
+interface Bounds { left: number; right: number; top: number; bottom: number }
+
+const VISUAL_SIZE = 112
+const ROUTE_CLEARANCE = 9
 
 const directions: Record<Position, Point> = {
   [Position.Top]: { x: 0, y: -1 },
@@ -61,11 +65,83 @@ function midpoint(points: Point[]): Point {
   return points[Math.floor(points.length / 2)] ?? { x: 0, y: 0 }
 }
 
+function visualBounds(node: ReturnType<typeof useInternalNode<TopologyNode>>): Bounds | null {
+  if (!node) return null
+  const width = node.measured.width ?? 150
+  const left = node.internals.positionAbsolute.x + (width - VISUAL_SIZE) / 2
+  const top = node.internals.positionAbsolute.y
+  return { left, right: left + VISUAL_SIZE, top, bottom: top + VISUAL_SIZE }
+}
+
+function expanded(bounds: Bounds): Bounds {
+  return {
+    left: bounds.left - ROUTE_CLEARANCE,
+    right: bounds.right + ROUTE_CLEARANCE,
+    top: bounds.top - ROUTE_CLEARANCE,
+    bottom: bounds.bottom + ROUTE_CLEARANCE,
+  }
+}
+
+function segmentCrossesBounds(start: Point, end: Point, bounds: Bounds): boolean {
+  if (start.y === end.y) {
+    const minX = Math.min(start.x, end.x)
+    const maxX = Math.max(start.x, end.x)
+    return start.y > bounds.top && start.y < bounds.bottom && Math.max(minX, bounds.left) < Math.min(maxX, bounds.right)
+  }
+  if (start.x === end.x) {
+    const minY = Math.min(start.y, end.y)
+    const maxY = Math.max(start.y, end.y)
+    return start.x > bounds.left && start.x < bounds.right && Math.max(minY, bounds.top) < Math.min(maxY, bounds.bottom)
+  }
+  return true
+}
+
+function isClear(points: Point[], obstacles: Bounds[]): boolean {
+  return points.slice(1).every((point, index) => obstacles.every((bounds) => !segmentCrossesBounds(points[index]!, point, bounds)))
+}
+
+function routeLength(points: Point[]): number {
+  return points.slice(1).reduce((total, point, index) => total + Math.abs(point.x - points[index]!.x) + Math.abs(point.y - points[index]!.y), 0)
+}
+
+function routedLeads(sourceLead: Point, targetLead: Point, horizontalStart: boolean, offset: number, obstacles: Bounds[]): Point[] {
+  const preferredX = (sourceLead.x + targetLead.x) / 2 + offset
+  const preferredY = (sourceLead.y + targetLead.y) / 2 + offset
+  const preferred = horizontalStart
+    ? [sourceLead, { x: preferredX, y: sourceLead.y }, { x: preferredX, y: targetLead.y }, targetLead]
+    : [sourceLead, { x: sourceLead.x, y: preferredY }, { x: targetLead.x, y: preferredY }, targetLead]
+
+  if (isClear(preferred, obstacles)) return preferred
+
+  const lane = offset === 0 ? 0 : Math.abs(offset) + (offset < 0 ? 8 : 0)
+  const xCandidates = [
+    preferredX,
+    sourceLead.x,
+    targetLead.x,
+    ...obstacles.flatMap((bounds) => [bounds.left - lane, bounds.right + lane]),
+  ]
+  const yCandidates = [
+    preferredY,
+    sourceLead.y,
+    targetLead.y,
+    ...obstacles.flatMap((bounds) => [bounds.top - lane, bounds.bottom + lane]),
+  ]
+  const candidates = [
+    ...xCandidates.map((x) => [sourceLead, { x, y: sourceLead.y }, { x, y: targetLead.y }, targetLead]),
+    ...yCandidates.map((y) => [sourceLead, { x: sourceLead.x, y }, { x: targetLead.x, y }, targetLead]),
+  ].filter((points) => isClear(points, obstacles))
+
+  if (!candidates.length) return preferred
+  return candidates.reduce((best, candidate) => routeLength(candidate) < routeLength(best) ? candidate : best)
+}
+
 export function ParallelCableEdge({
-  id, sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, markerStart, markerEnd,
+  id, source: sourceId, target: targetId, sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, markerStart, markerEnd,
   style, selected, label, labelStyle, labelShowBg, labelBgStyle,
   labelBgPadding, labelBgBorderRadius, interactionWidth, data,
 }: EdgeProps<TopologyEdge>) {
+  const sourceNode = useInternalNode<TopologyNode>(sourceId)
+  const targetNode = useInternalNode<TopologyNode>(targetId)
   const source = { x: sourceX, y: sourceY }
   const target = { x: targetX, y: targetY }
   const sourceDirection = directions[sourcePosition]
@@ -75,10 +151,9 @@ export function ParallelCableEdge({
   const targetLead = { x: targetX + targetDirection.x * leadLength, y: targetY + targetDirection.y * leadLength }
   const offset = data?.parallelOffset ?? 0
   const horizontalStart = sourceDirection.x !== 0
-  const trunk = horizontalStart
-    ? { first: { x: (sourceLead.x + targetLead.x) / 2 + offset, y: sourceLead.y }, second: { x: (sourceLead.x + targetLead.x) / 2 + offset, y: targetLead.y } }
-    : { first: { x: sourceLead.x, y: (sourceLead.y + targetLead.y) / 2 + offset }, second: { x: targetLead.x, y: (sourceLead.y + targetLead.y) / 2 + offset } }
-  const points = compactPoints([source, sourceLead, trunk.first, trunk.second, targetLead, target])
+  const obstacles = [visualBounds(sourceNode), visualBounds(targetNode)].filter((bounds): bounds is Bounds => bounds !== null).map(expanded)
+  const routed = routedLeads(sourceLead, targetLead, horizontalStart, offset, obstacles)
+  const points = compactPoints([source, ...routed, target])
   const path = roundedPath(points)
   const labelPoint = midpoint(points)
 

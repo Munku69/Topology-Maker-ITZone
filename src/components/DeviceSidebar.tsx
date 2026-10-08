@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity, Cable, ChevronDown, PanelLeftClose, Radio, Shuffle } from 'lucide-react'
+import { Activity, Cable, ChevronDown, PanelLeftClose, Radio, Shuffle, Trash2 } from 'lucide-react'
 import { DEVICE_GROUPS, DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_PRESETS } from '../constants/cables'
 import type { CableType, DeviceCategory, DeviceType } from '../types/topology'
@@ -13,9 +13,12 @@ interface DeviceSidebarProps {
   cableStartLabel: string | null
   onSelectCable: (type: CableType) => void
   portSelection: boolean
+  onResizeStart: (event: React.PointerEvent) => void
+  deleteMode: boolean
+  onToggleDeleteMode: () => void
 }
 
-export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, portSelection }: DeviceSidebarProps) {
+export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, portSelection, onResizeStart, deleteMode, onToggleDeleteMode }: DeviceSidebarProps) {
   const [openGroups, setOpenGroups] = useState<Set<DeviceCategory>>(() => new Set(['network']))
   if (collapsed) return null
   const toggleGroup = (category: DeviceCategory) => setOpenGroups((current) => {
@@ -30,6 +33,7 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
   }
   return (
     <aside className="sidebar library-panel" aria-label="Device library">
+      <div className="panel-resizer panel-resizer--library" role="separator" aria-orientation="vertical" aria-label="Resize device library" title="Drag to resize the device library" onPointerDown={onResizeStart} />
       <div className="panel-heading">
         <div><p className="eyebrow">Components</p><h2>Device library</h2></div>
         <button className="icon-button" onClick={onToggle} title="Collapse device library"><PanelLeftClose size={17} /></button>
@@ -75,6 +79,13 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
       <div className="library-tip">
         <span className="tip-key">TIP</span>
         <p>Press Escape at any time to cancel the active cable operation.</p>
+      </div>
+      <div className="sidebar-tools">
+        <button className={`sidebar-delete-tool ${deleteMode ? 'is-active' : ''}`} onClick={onToggleDeleteMode} title={deleteMode ? 'Exit delete mode' : 'Delete devices and cables'} aria-pressed={deleteMode}>
+          <Trash2 size={16} />
+          <span><strong>Delete tool</strong><small>{deleteMode ? 'Click a device or cable' : 'Remove devices and cables'}</small></span>
+          <em>{deleteMode ? 'ACTIVE' : 'TOOL'}</em>
+        </button>
       </div>
     </aside>
   )

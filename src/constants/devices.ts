@@ -16,6 +16,10 @@ const iface = (name: string, role: string, ip = ''): Omit<DeviceInterface, 'id'>
 const pair = (first = 'eth0', second = 'eth1'): Omit<DeviceInterface, 'id'>[] => [iface(first, 'LAN'), iface(second, 'WAN')]
 
 export const DEVICE_PRESETS: Record<DeviceType, DevicePreset> = {
+  isp: {
+    type: 'isp', category: 'network', label: 'ISP', defaultName: 'ISP-01', description: 'Internet service provider connection', accent: '#2563eb', iconPath: '/device-icons/isp.png',
+    defaultInterfaces: [iface('WAN1', 'Internet'), iface('WAN2', 'Internet')],
+  },
   firewall: {
     type: 'firewall', category: 'network', label: 'Firewall', defaultName: 'FGT-HQ', description: 'Secure the network edge', accent: '#fb7185', iconPath: '/device-icons/firewall.png',
     defaultInterfaces: [iface('port1', 'LAN'), iface('port2', 'WAN', 'DHCP')],
@@ -126,7 +130,7 @@ export const DEVICE_PRESETS: Record<DeviceType, DevicePreset> = {
 }
 
 export const DEVICE_GROUPS: { id: DeviceCategory; label: string; description: string; types: DeviceType[] }[] = [
-  { id: 'network', label: 'Network', description: 'Routing, switching, and delivery', types: ['firewall', 'router', 'l2-switch', 'switch', 'access-point', 'load-balancer'] },
+  { id: 'network', label: 'Network', description: 'Routing, switching, and delivery', types: ['isp', 'firewall', 'router', 'l2-switch', 'switch', 'access-point', 'load-balancer'] },
   { id: 'endpoints', label: 'Endpoints', description: 'Users, phones, and cameras', types: ['laptop', 'mobile', 'pc', 'ip-camera', 'ip-phone'] },
   { id: 'servers', label: 'Servers', description: 'Compute, applications, and storage', types: ['server', 'web-server', 'dns-server', 'app-server', 'db-server', 'file-server', 'mail-server', 'storage-server'] },
   { id: 'security', label: 'Security', description: 'Detection, access, and protection', types: ['ddos-protection', 'waf', 'edr', 'xdr', 'iam', 'pam', 'siem', 'soar', 'db-firewall', 'dlp', 'sandbox', 'ciphertrust'] },
@@ -158,7 +162,7 @@ export function createDemoTopology(): { nodes: TopologyNode[]; edges: TopologyEd
     data: { ...createDeviceData(type), ...patch, deviceType: type },
   })
   const nodes = [
-    makeNode('demo-internet', 'router', 380, 40, { name: 'INTERNET', hostname: 'INTERNET' }),
+    makeNode('demo-internet', 'isp', 380, 40, { name: 'INTERNET', hostname: 'INTERNET' }),
     makeNode('demo-fw', 'firewall', 380, 230, { name: 'FGT-HQ', hostname: 'FGT-HQ', managementIp: '192.168.1.99/24' }),
     makeNode('demo-switch', 'switch', 380, 430, { name: 'CORE-SW1', hostname: 'CORE-SW1', managementIp: '192.168.1.2/24' }),
     makeNode('demo-pc', 'pc', 160, 650, { name: 'PC-01', hostname: 'PC-01', managementIp: '192.168.1.100/24' }),
@@ -172,7 +176,7 @@ export function createDemoTopology(): { nodes: TopologyNode[]; edges: TopologyEd
     style: getCableStyle(cableType),
   })
   return { nodes, edges: [
-    makeEdge('demo-edge-1', 'demo-internet', 'demo-fw', 'Gi0/0', 'port2'),
+    makeEdge('demo-edge-1', 'demo-internet', 'demo-fw', 'WAN1', 'port2'),
     makeEdge('demo-edge-2', 'demo-fw', 'demo-switch', 'port1', 'Gi0/1'),
     makeEdge('demo-edge-3', 'demo-switch', 'demo-pc', 'Fa0/1', 'eth0'),
     makeEdge('demo-edge-4', 'demo-switch', 'demo-server', 'Fa0/2', 'eth0'),

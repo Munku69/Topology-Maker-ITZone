@@ -1,4 +1,5 @@
 import { forwardRef, useMemo } from 'react'
+import { Trash2 } from 'lucide-react'
 import {
   Background, BackgroundVariant, ConnectionMode, Controls, MiniMap, ReactFlow,
   type Connection, type EdgeChange, type EdgeTypes, type NodeChange, type NodeTypes,
@@ -23,8 +24,11 @@ interface TopologyCanvasProps {
   onInit: (instance: ReactFlowInstance<TopologyNode, TopologyEdge>) => void
   onSelectionChange: (node: TopologyNode | null, edge: TopologyEdge | null) => void
   onNodeClick: (node: TopologyNode, handleId: string) => void
+  onEdgeClick: (edge: TopologyEdge) => void
   onReconnect: (edge: TopologyEdge, connection: Connection) => void
   cableMode: boolean
+  deleteMode: boolean
+  cableSourceNodeId: string | null
   cableStatus: string | null
   showCables: boolean
   portSelection: boolean
@@ -32,6 +36,11 @@ interface TopologyCanvasProps {
 }
 
 export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(function TopologyCanvas(props, ref) {
+  const renderedNodes = useMemo(() => props.nodes.map((node) => ({
+    ...node,
+    className: [node.className, node.id === props.cableSourceNodeId ? 'is-cable-source' : ''].filter(Boolean).join(' '),
+  })), [props.cableSourceNodeId, props.nodes])
+
   const renderedEdges = useMemo(() => {
     const groups = new Map<string, TopologyEdge[]>()
     props.edges.forEach((edge) => {
@@ -59,10 +68,10 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
   }, [props.edges, props.portSelection])
 
   return (
-    <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'}`} ref={ref}>
+    <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'}`} ref={ref}>
       {props.nodes.length === 0 && <div className="empty-canvas"><span className="empty-canvas__glyph">+</span><h2>Build your network</h2><p>Drag a device here to start building your topology.</p></div>}
       <ReactFlow<TopologyNode, TopologyEdge>
-        nodes={props.nodes}
+        nodes={renderedNodes}
         edges={renderedEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -76,6 +85,7 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
           const bounds = (visual ?? element).getBoundingClientRect()
           props.onNodeClick(node, nearestOutlineHandle((event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height))
         }}
+        onEdgeClick={(event, edge) => { event.stopPropagation(); props.onEdgeClick(edge) }}
         onReconnect={props.onReconnect}
         onSelectionChange={({ nodes, edges }) => props.onSelectionChange(nodes[0] ?? null, edges[0] ?? null)}
         onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move' }}
@@ -90,7 +100,7 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
         edgesReconnectable
         reconnectRadius={24}
         connectionMode={ConnectionMode.Loose}
-        nodesDraggable={!props.cableMode}
+        nodesDraggable={!props.cableMode && !props.deleteMode}
         deleteKeyCode={['Backspace', 'Delete']}
         minZoom={0.15}
         maxZoom={2.5}
@@ -104,6 +114,7 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
         <MiniMap position="bottom-right" pannable zoomable nodeStrokeWidth={3} style={{ width: 160, height: 105 }} maskColor="rgba(3, 9, 17, .68)" nodeColor={(node) => DEVICE_PRESETS[(node.type ?? 'router') as DeviceType]?.accent ?? '#0d6efd'} />
         <div className="canvas-badge">CANVAS · {props.nodes.length} DEVICE{props.nodes.length === 1 ? '' : 'S'} · {props.edges.length} LINK{props.edges.length === 1 ? '' : 'S'}{props.showCables ? '' : ' · HIDDEN'}</div>
         {props.cableStatus && <div className="cable-mode-badge"><span />{props.cableStatus}<kbd>ESC</kbd></div>}
+        {props.deleteMode && <div className="delete-mode-badge"><Trash2 size={14} />Click a device or cable to remove it<kbd>ESC</kbd></div>}
       </ReactFlow>
     </main>
   )

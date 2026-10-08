@@ -13,7 +13,7 @@ Everything runs locally in the browser. There is no backend, account system, dat
 ## Features
 
 - Collapsible, categorized drag-and-drop device library
-- 34 device types using the selected ITZone topology icon set
+- 35 device types using the selected ITZone topology icon set
 - Packet Tracer-style cable workflow with optional port selection
 - Parallel links between the same two devices
 - Movable cable endpoints with device-outline attachment points

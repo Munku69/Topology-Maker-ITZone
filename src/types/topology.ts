@@ -1,7 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 
 export const DEVICE_TYPES = [
-  'firewall', 'router', 'l2-switch', 'switch', 'access-point', 'load-balancer',
+  'isp', 'firewall', 'router', 'l2-switch', 'switch', 'access-point', 'load-balancer',
   'laptop', 'mobile', 'pc', 'ip-camera', 'ip-phone',
   'server', 'web-server', 'dns-server', 'app-server', 'db-server', 'file-server', 'mail-server', 'storage-server',
   'ddos-protection', 'waf', 'edr', 'xdr', 'iam', 'pam', 'siem', 'soar', 'db-firewall', 'dlp', 'sandbox', 'ciphertrust',
