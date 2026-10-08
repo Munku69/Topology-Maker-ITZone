@@ -6,10 +6,12 @@ import { DEVICE_PRESETS } from '../constants/devices'
 import { safeFilename } from './project'
 
 interface RenderedDiagram { dataUrl: string; width: number; height: number }
+export type ExportBackground = 'canvas' | 'white'
 
-async function renderCompleteDiagram(nodes: TopologyNode[]): Promise<RenderedDiagram> {
-  if (!nodes.length) throw new Error('Add at least one device before exporting.')
+async function renderCompleteDiagram(nodes: TopologyNode[], background: ExportBackground): Promise<RenderedDiagram> {
+  if (!nodes.length) throw new Error('Add at least one device or text box before exporting.')
   const viewport = document.querySelector<HTMLElement>('.react-flow__viewport')
+  const canvas = document.querySelector<HTMLElement>('.canvas-shell')
   if (!viewport) throw new Error('Topology canvas is unavailable.')
   const bounds = getNodesBounds(nodes)
   const padding = 100
@@ -20,7 +22,8 @@ async function renderCompleteDiagram(nodes: TopologyNode[]): Promise<RenderedDia
   const width = Math.round(rawWidth * scale)
   const height = Math.round(rawHeight * scale)
   const { x, y, zoom } = getViewportForBounds(bounds, width, height, 0.05, 2, 0.12)
-  const backgroundColor = document.documentElement.dataset.theme === 'light' ? '#eef3f7' : '#07101d'
+  const canvasColor = canvas ? window.getComputedStyle(canvas).backgroundColor : '#1b2228'
+  const backgroundColor = background === 'white' ? '#ffffff' : canvasColor
   const dataUrl = await toPng(viewport, {
     backgroundColor,
     width,
@@ -33,8 +36,8 @@ async function renderCompleteDiagram(nodes: TopologyNode[]): Promise<RenderedDia
   return { dataUrl, width, height }
 }
 
-export async function exportTopologyPng(projectName: string, nodes: TopologyNode[]): Promise<void> {
-  const image = await renderCompleteDiagram(nodes)
+export async function exportTopologyPng(projectName: string, nodes: TopologyNode[], background: ExportBackground = 'canvas'): Promise<void> {
+  const image = await renderCompleteDiagram(nodes, background)
   const anchor = document.createElement('a')
   anchor.href = image.dataUrl
   anchor.download = `${safeFilename(projectName)}-topology.png`
@@ -95,28 +98,33 @@ function addTable(pdf: jsPDF, title: string, headers: string[], rows: string[][]
   })
 }
 
-export async function exportTopologyPdf(projectName: string, nodes: TopologyNode[], edges: TopologyEdge[]): Promise<void> {
-  const rendered = await renderCompleteDiagram(nodes)
+export async function exportTopologyPdf(projectName: string, nodes: TopologyNode[], edges: TopologyEdge[], background: ExportBackground = 'canvas'): Promise<void> {
+  const rendered = await renderCompleteDiagram(nodes, background)
+  const deviceNodes = nodes.filter((node) => node.data.deviceType !== 'text-box')
   const generated = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date())
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true })
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
   drawPageHeader(pdf, 'NETWORK TOPOLOGY', generated, pageWidth)
   pdf.setTextColor(24, 49, 68); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.text(projectName || 'Untitled Network', 14, 34)
-  pdf.setTextColor(89, 112, 128); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.text(`${nodes.length} devices  •  ${edges.length} connections`, 14, 40)
+  pdf.setTextColor(89, 112, 128); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.text(`${deviceNodes.length} devices  •  ${edges.length} connections`, 14, 40)
   const maxWidth = pageWidth - 28
   const maxHeight = pageHeight - 58
   const ratio = Math.min(maxWidth / rendered.width, maxHeight / rendered.height)
   const imageWidth = rendered.width * ratio
   const imageHeight = rendered.height * ratio
   const imageX = (pageWidth - imageWidth) / 2
-  pdf.setFillColor(7, 16, 29); pdf.roundedRect(imageX - 2, 46, imageWidth + 4, imageHeight + 4, 2, 2, 'F')
+  if (background === 'white') {
+    pdf.setFillColor(255, 255, 255); pdf.setDrawColor(207, 216, 222); pdf.roundedRect(imageX - 2, 46, imageWidth + 4, imageHeight + 4, 2, 2, 'FD')
+  } else {
+    pdf.setFillColor(27, 34, 40); pdf.roundedRect(imageX - 2, 46, imageWidth + 4, imageHeight + 4, 2, 2, 'F')
+  }
   pdf.addImage(rendered.dataUrl, 'PNG', imageX, 48, imageWidth, imageHeight, undefined, 'FAST')
 
-  const inventoryRows = nodes.map((node) => [node.data.name, DEVICE_PRESETS[node.data.deviceType].label, node.data.hostname, node.data.managementIp || '—'])
-  addTable(pdf, 'DEVICE INVENTORY', ['Device', 'Type', 'Hostname', 'Management IP'], inventoryRows, [72, 52, 72, 72], generated, true)
+  const inventoryRows = deviceNodes.map((node) => [node.data.name, DEVICE_PRESETS[node.data.deviceType].label, node.data.hostname, node.data.managementIp || '—'])
+  if (inventoryRows.length) addTable(pdf, 'DEVICE INVENTORY', ['Device', 'Type', 'Hostname', 'Management IP'], inventoryRows, [72, 52, 72, 72], generated, true)
 
-  const interfaceRows = nodes.flatMap((node) => node.data.interfaces.map((item) => [node.data.name, item.name, item.ip || '—', item.vlan || '—', item.role || '—', item.description || '—']))
+  const interfaceRows = deviceNodes.flatMap((node) => node.data.interfaces.map((item) => [node.data.name, item.name, item.ip || '—', item.vlan || '—', item.role || '—', item.description || '—']))
   if (interfaceRows.length) addTable(pdf, 'INTERFACE / IP INFORMATION', ['Device', 'Interface', 'IP / CIDR', 'VLAN', 'Role', 'Description'], interfaceRows, [48, 38, 62, 26, 36, 58], generated, true)
   pdf.save(`${safeFilename(projectName)}-topology-report.pdf`)
 }

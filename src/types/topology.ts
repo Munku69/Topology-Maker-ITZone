@@ -5,7 +5,7 @@ export const DEVICE_TYPES = [
   'laptop', 'mobile', 'pc', 'ip-camera', 'ip-phone',
   'server', 'web-server', 'dns-server', 'app-server', 'db-server', 'file-server', 'mail-server', 'storage-server',
   'ddos-protection', 'waf', 'edr', 'xdr', 'iam', 'pam', 'siem', 'soar', 'db-firewall', 'dlp', 'sandbox', 'ciphertrust',
-  'ups', 'log-management', 'network-monitor',
+  'ups', 'log-management', 'network-monitor', 'text-box',
 ] as const
 export type DeviceType = (typeof DEVICE_TYPES)[number]
 export type DeviceCategory = 'network' | 'endpoints' | 'servers' | 'security' | 'operations'

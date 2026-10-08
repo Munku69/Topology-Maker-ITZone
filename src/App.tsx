@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Connection, ReactFlowInstance } from '@xyflow/react'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DeviceSidebar } from './components/DeviceSidebar'
+import { ExportOptionsDialog, type ExportFormat } from './components/ExportOptionsDialog'
 import { PortSelectionDialog } from './components/PortSelectionDialog'
 import { PropertiesPanel } from './components/PropertiesPanel'
 import { ProjectManagerDialog } from './components/ProjectManagerDialog'
 import { Toasts, type ToastKind, type ToastMessage } from './components/Toast'
-import { Toolbar } from './components/Toolbar'
+import { Toolbar, type ExportBackground } from './components/Toolbar'
 import { TopologyCanvas } from './components/TopologyCanvas'
 import { createDemoTopology } from './constants/devices'
 import { CABLE_PRESETS } from './constants/cables'
@@ -36,10 +37,12 @@ function App() {
   const [projectToDelete, setProjectToDelete] = useState<ProjectSummary | null>(null)
   const [selectedCable, setSelectedCable] = useState<CableType | null>(null)
   const [deleteMode, setDeleteMode] = useState(false)
+  const [textToolMode, setTextToolMode] = useState(false)
   const [cableEndpoint, setCableEndpoint] = useState<CableEndpoint | null>(null)
   const [portPrompt, setPortPrompt] = useState<PortPrompt | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [exporting, setExporting] = useState(false)
+  const [exportDialog, setExportDialog] = useState<ExportFormat | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const selectedNode = topology.nodes.find((node) => node.id === selectedNodeId) ?? null
@@ -82,7 +85,7 @@ function App() {
       window.setTimeout(() => flow?.fitView({ padding: 0.2, duration: 450 }), 80)
       notify('success', `Imported “${action.project.projectName}”.`)
     }
-    setSelectedNodeId(null); setSelectedEdgeId(null); setPendingAction(null); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); setDeleteMode(false)
+    setSelectedNodeId(null); setSelectedEdgeId(null); setPendingAction(null); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); setDeleteMode(false); setTextToolMode(false)
   }, [flow, notify, topology])
 
   const requestAction = (action: PendingAction) => setPendingAction(action)
@@ -99,14 +102,14 @@ function App() {
     }
   }
 
-  const performExport = async (kind: 'pdf' | 'png') => {
-    if (!topology.nodes.length) { notify('info', 'Add at least one device before exporting a diagram.'); return }
+  const performExport = async (kind: 'pdf' | 'png', background: ExportBackground) => {
+    if (!topology.nodes.length) { notify('info', 'Add at least one device or text box before exporting a diagram.'); return }
     setExporting(true)
     try {
       const { exportTopologyPdf, exportTopologyPng } = await import('./utils/exportDiagram')
-      if (kind === 'pdf') await exportTopologyPdf(topology.projectName, topology.nodes, topology.edges)
-      else await exportTopologyPng(topology.projectName, topology.nodes)
-      notify('success', `${kind.toUpperCase()} exported successfully.`)
+      if (kind === 'pdf') await exportTopologyPdf(topology.projectName, topology.nodes, topology.edges, background)
+      else await exportTopologyPng(topology.projectName, topology.nodes, background)
+      notify('success', `${kind.toUpperCase()} exported with a ${background === 'white' ? 'white' : 'canvas'} background.`)
     } catch (error) {
       console.error(error)
       notify('error', `${kind.toUpperCase()} export failed. Please try again.`)
@@ -119,9 +122,9 @@ function App() {
   }, [])
 
   const clearSelection = () => { topology.clearSelection(); setSelectedNodeId(null); setSelectedEdgeId(null) }
-  const deleteSelection = () => { topology.deleteSelection(); setSelectedNodeId(null); setSelectedEdgeId(null); notify('info', selectedNode ? 'Device and connected links deleted.' : 'Connection deleted.') }
+  const deleteSelection = () => { topology.deleteSelection(); setSelectedNodeId(null); setSelectedEdgeId(null); notify('info', selectedNode?.data.deviceType === 'text-box' ? 'Text box deleted.' : selectedNode ? 'Device and connected links deleted.' : 'Connection deleted.') }
   const resetWorkspaceInteraction = () => {
-    setSelectedNodeId(null); setSelectedEdgeId(null); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); setDeleteMode(false)
+    setSelectedNodeId(null); setSelectedEdgeId(null); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); setDeleteMode(false); setTextToolMode(false)
   }
   const fitCurrentProject = () => window.setTimeout(() => flow?.fitView({ padding: 0.2, duration: 350 }), 80)
   const createLocalProject = (name = 'Untitled Network') => {
@@ -134,6 +137,7 @@ function App() {
 
   const selectCableTool = (type: CableType) => {
     setDeleteMode(false)
+    setTextToolMode(false)
     if (selectedCable === type) {
       setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null)
       notify('info', 'Cable tool cancelled.')
@@ -169,7 +173,11 @@ function App() {
     if (deleteMode) {
       topology.deleteNode(node.id)
       setSelectedNodeId(null); setSelectedEdgeId(null)
-      notify('info', `${node.data.name || 'Device'} and its connected cables deleted.`)
+      notify('info', node.data.deviceType === 'text-box' ? 'Text box deleted.' : `${node.data.name || 'Device'} and its connected cables deleted.`)
+      return
+    }
+    if (node.data.deviceType === 'text-box') {
+      if (selectedCable) notify('info', 'Text boxes cannot be connected to cables.')
       return
     }
     if (!selectedCable) return
@@ -193,9 +201,26 @@ function App() {
   const toggleDeleteMode = () => {
     const next = !deleteMode
     setDeleteMode(next)
+    setTextToolMode(false)
     setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null)
     clearSelection()
     notify('info', next ? 'Delete tool active. Click a device or cable to remove it.' : 'Delete tool cancelled.')
+  }
+
+  const toggleTextTool = () => {
+    const next = !textToolMode
+    setTextToolMode(next)
+    setDeleteMode(false)
+    setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null)
+    clearSelection()
+    notify('info', next ? 'Text box tool active. Click the canvas to place a note.' : 'Text box tool cancelled.')
+  }
+
+  const addTextBoxAt = (point: { x: number; y: number }) => {
+    if (!flow || !textToolMode) return
+    const id = topology.addDevice('text-box', flow.screenToFlowPosition(point))
+    setSelectedNodeId(id); setSelectedEdgeId(null); setTextToolMode(false)
+    notify('success', 'Text box added. Edit it in Properties.')
   }
 
   const handleDeleteEdge = (edge: TopologyEdge) => {
@@ -239,6 +264,17 @@ function App() {
   }, [deleteMode, notify])
 
   useEffect(() => {
+    if (!textToolMode) return
+    const cancelTextTool = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setTextToolMode(false)
+      notify('info', 'Text box tool cancelled.')
+    }
+    window.addEventListener('keydown', cancelTextTool)
+    return () => window.removeEventListener('keydown', cancelTextTool)
+  }, [notify, textToolMode])
+
+  useEffect(() => {
     const context = document.modelContext
     if (!context?.registerTool) return
     const lifecycle = new AbortController()
@@ -246,7 +282,7 @@ function App() {
       await context.registerTool({
         name: 'get_topology_summary', title: 'Get topology summary', description: 'Read the current project name and counts of devices and connections.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: false },
-        execute: () => ({ projectName: topology.projectName, devices: topology.nodes.length, connections: topology.edges.length }),
+        execute: () => ({ projectName: topology.projectName, devices: topology.nodes.filter((node) => node.data.deviceType !== 'text-box').length, connections: topology.edges.length }),
       }, { signal: lifecycle.signal })
       await context.registerTool({
         name: 'add_network_device', title: 'Add network device', description: 'Add a network device to the visible topology canvas.',
@@ -265,15 +301,16 @@ function App() {
 
   return (
     <div className={`app-shell ${leftCollapsed ? 'left-collapsed' : ''} ${rightCollapsed ? 'right-collapsed' : ''}`} style={{ '--library-width': `${panelSizes.left}px`, '--inspector-width': `${panelSizes.right}px` } as React.CSSProperties}>
-      <Toolbar projectName={topology.projectName} saveState={topology.saveState} leftCollapsed={leftCollapsed} rightCollapsed={rightCollapsed} onProjectNameChange={topology.setProjectName} onManageProjects={() => setProjectManagerOpen(true)} onNew={() => requestAction({ type: 'new' })} onSave={() => { topology.saveNow(); notify('success', 'Project saved locally.') }} onImport={() => fileInputRef.current?.click()} onExportJson={() => { downloadJson(topology.getProject()); notify('success', 'Editable project downloaded.') }} onExportPdf={() => void performExport('pdf')} onExportPng={() => void performExport('png')} onLoadDemo={() => requestAction({ type: 'demo' })} onToggleLeft={() => setLeftCollapsed(false)} onToggleRight={() => setRightCollapsed(false)} exporting={exporting} theme={theme} onToggleTheme={toggleTheme} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onShowCablesChange={(value) => { setFeature('showCables', value); if (!value) clearSelection(); notify('info', value ? 'Cables are visible.' : 'Cables are hidden.') }} onPortSelectionChange={(value) => { setFeature('portSelection', value); setCableEndpoint(null); setPortPrompt(null); notify('info', value ? 'Port selection enabled.' : 'Port selection disabled.') }} onShowDeviceLabelsChange={(value) => { setFeature('showDeviceLabels', value); notify('info', value ? 'Device labels are visible.' : 'Device labels are hidden.') }} />
-      <DeviceSidebar collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(true)} selectedCable={selectedCable} cableStartLabel={cableStartNode ? `${cableStartNode.data.name} ${cableEndpoint?.interfaceName ?? ''}` : null} onSelectCable={selectCableTool} portSelection={settings.portSelection} onResizeStart={startLeftResize} deleteMode={deleteMode} onToggleDeleteMode={toggleDeleteMode} />
-      <TopologyCanvas ref={canvasRef} nodes={topology.nodes} edges={topology.edges} onNodesChange={topology.onNodesChange} onEdgesChange={topology.onEdgesChange} onInit={setFlow} onSelectionChange={onSelectionChange} onNodeClick={handleCableNodeClick} onEdgeClick={handleDeleteEdge} onReconnect={topology.reconnectConnection} cableMode={Boolean(selectedCable)} deleteMode={deleteMode} cableSourceNodeId={cableEndpoint?.nodeId ?? null} cableStatus={selectedCable ? cableEndpoint ? `${CABLE_PRESETS[selectedCable].shortLabel}: click the second device` : `${CABLE_PRESETS[selectedCable].shortLabel}: click the first device` : null} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onDropDevice={(type, point) => { if (!flow) return; const position = flow.screenToFlowPosition(point); const id = topology.addDevice(type, position); setSelectedNodeId(id); setSelectedEdgeId(null) }} />
+      <Toolbar projectName={topology.projectName} saveState={topology.saveState} leftCollapsed={leftCollapsed} rightCollapsed={rightCollapsed} onProjectNameChange={topology.setProjectName} onManageProjects={() => setProjectManagerOpen(true)} onNew={() => requestAction({ type: 'new' })} onSave={() => { topology.saveNow(); notify('success', 'Project saved locally.') }} onImport={() => fileInputRef.current?.click()} onExportJson={() => { downloadJson(topology.getProject()); notify('success', 'Editable project downloaded.') }} onExportPdf={() => setExportDialog('pdf')} onExportPng={() => setExportDialog('png')} onLoadDemo={() => requestAction({ type: 'demo' })} onToggleLeft={() => setLeftCollapsed(false)} onToggleRight={() => setRightCollapsed(false)} exporting={exporting} theme={theme} onToggleTheme={toggleTheme} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onShowCablesChange={(value) => { setFeature('showCables', value); if (!value) clearSelection(); notify('info', value ? 'Cables are visible.' : 'Cables are hidden.') }} onPortSelectionChange={(value) => { setFeature('portSelection', value); setCableEndpoint(null); setPortPrompt(null); notify('info', value ? 'Port selection enabled.' : 'Port selection disabled.') }} onShowDeviceLabelsChange={(value) => { setFeature('showDeviceLabels', value); notify('info', value ? 'Device labels are visible.' : 'Device labels are hidden.') }} />
+      <DeviceSidebar collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(true)} selectedCable={selectedCable} cableStartLabel={cableStartNode ? `${cableStartNode.data.name} ${cableEndpoint?.interfaceName ?? ''}` : null} onSelectCable={selectCableTool} portSelection={settings.portSelection} onResizeStart={startLeftResize} deleteMode={deleteMode} onToggleDeleteMode={toggleDeleteMode} textToolMode={textToolMode} onToggleTextTool={toggleTextTool} />
+      <TopologyCanvas ref={canvasRef} nodes={topology.nodes} edges={topology.edges} onNodesChange={topology.onNodesChange} onEdgesChange={topology.onEdgesChange} onInit={setFlow} onSelectionChange={onSelectionChange} onNodeClick={handleCableNodeClick} onEdgeClick={handleDeleteEdge} onReconnect={topology.reconnectConnection} cableMode={Boolean(selectedCable)} deleteMode={deleteMode} textToolMode={textToolMode} cableSourceNodeId={cableEndpoint?.nodeId ?? null} cableStatus={selectedCable ? cableEndpoint ? `${CABLE_PRESETS[selectedCable].shortLabel}: click the second device` : `${CABLE_PRESETS[selectedCable].shortLabel}: click the first device` : null} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onAddTextBox={addTextBoxAt} onDropDevice={(type, point) => { if (!flow) return; const position = flow.screenToFlowPosition(point); const id = topology.addDevice(type, position); setSelectedNodeId(id); setSelectedEdgeId(null) }} />
       <PropertiesPanel nodes={topology.nodes} selectedNode={selectedNode} selectedEdge={selectedEdge} collapsed={rightCollapsed} onToggle={() => setRightCollapsed(true)} onUpdateNode={topology.updateNode} onUpdateEdge={topology.updateEdge} onAddInterface={topology.addInterface} onUpdateInterface={topology.updateInterface} onRemoveInterface={topology.removeInterface} onDelete={deleteSelection} onCloseSelection={clearSelection} portSelection={settings.portSelection} onResizeStart={startRightResize} />
       <input ref={fileInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => void onImportFile(event.target.files?.[0])} />
       <ProjectManagerDialog open={projectManagerOpen} projects={topology.projects} activeProjectId={topology.activeProjectId} onClose={() => setProjectManagerOpen(false)} onCreate={createLocalProject} onSwitch={(id) => { if (topology.switchProject(id)) { resetWorkspaceInteraction(); setProjectManagerOpen(false); fitCurrentProject(); notify('success', 'Project opened.') } }} onRename={(id, name) => { topology.renameProject(id, name); notify('success', 'Project renamed.') }} onDuplicate={(id) => { const duplicateId = topology.duplicateProject(id); if (duplicateId) { resetWorkspaceInteraction(); setProjectManagerOpen(false); fitCurrentProject(); notify('success', 'Project duplicated.') } }} onDelete={(project) => { setProjectManagerOpen(false); setProjectToDelete(project) }} />
       <ConfirmDialog open={Boolean(pendingAction)} title="Are you sure?" message={pendingAction?.type === 'new' ? 'Your current project will remain saved locally and a new blank project will be opened.' : pendingAction?.type === 'demo' ? 'Loading the example will replace every device and cable on the current project.' : 'Importing this file will replace every device and cable on the current project.'} confirmLabel={pendingAction?.type === 'new' ? 'Create project' : pendingAction?.type === 'demo' ? 'Load example' : 'Replace and import'} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && runPending(pendingAction)} />
       <ConfirmDialog open={Boolean(projectToDelete)} title="Delete this project?" message={`“${projectToDelete?.projectName ?? ''}” will be removed from this browser. Export it as JSON first if you may need it later.`} confirmLabel="Delete project" onCancel={() => { setProjectToDelete(null); setProjectManagerOpen(true) }} onConfirm={() => { if (!projectToDelete) return; const name = projectToDelete.projectName; topology.deleteProject(projectToDelete.id); setProjectToDelete(null); resetWorkspaceInteraction(); fitCurrentProject(); notify('info', `Deleted “${name}”.`) }} />
       <PortSelectionDialog node={settings.portSelection ? portPromptNode : null} stage={portPrompt?.stage ?? 'first'} cableType={selectedCable} usedInterfaces={usedInterfaces} onCancel={() => setPortPrompt(null)} onConfirm={confirmCablePort} />
+      <ExportOptionsDialog format={exportDialog} exporting={exporting} onCancel={() => setExportDialog(null)} onExport={(background) => { if (!exportDialog) return; const format = exportDialog; setExportDialog(null); void performExport(format, background) }} />
       <Toasts toasts={toasts} onDismiss={dismissToast} />
       {exporting && <div className="export-overlay"><span className="spinner" /><strong>Preparing complete topology…</strong></div>}
     </div>

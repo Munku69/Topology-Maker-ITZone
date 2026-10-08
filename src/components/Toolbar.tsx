@@ -30,6 +30,8 @@ interface ToolbarProps {
   onShowDeviceLabelsChange: (value: boolean) => void
 }
 
+export type ExportBackground = 'canvas' | 'white'
+
 export function Toolbar(props: ToolbarProps) {
   return (
     <header className="toolbar">
@@ -48,7 +50,7 @@ export function Toolbar(props: ToolbarProps) {
           <button className="toolbar-button" title="Export options"><Download size={16} /><span>Export</span><ChevronDown size={14} /></button>
           <div className="export-menu__panel">
             <button onClick={props.onExportJson}><FileJson size={16} /><span><strong>Project JSON</strong><small>Editable project file</small></span></button>
-            <button onClick={props.onExportPng} disabled={props.exporting}><ImageDown size={16} /><span><strong>Topology PNG</strong><small>Full diagram image</small></span></button>
+            <button onClick={props.onExportPng} disabled={props.exporting}><ImageDown size={16} /><span><strong>Topology PNG</strong><small>Choose export background</small></span></button>
             <button onClick={props.onExportPdf} disabled={props.exporting}><FileDown size={16} /><span><strong>PDF report</strong><small>Diagram and inventory</small></span></button>
           </div>
         </div>

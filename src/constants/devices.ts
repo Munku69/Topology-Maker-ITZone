@@ -127,6 +127,9 @@ export const DEVICE_PRESETS: Record<DeviceType, DevicePreset> = {
   'network-monitor': {
     type: 'network-monitor', category: 'operations', label: 'Network Monitor', defaultName: 'NMS-01', description: 'Monitor network health', accent: '#14b8a6', iconPath: '/device-icons/network-monitor.png', defaultInterfaces: [iface('eth0', 'Management')],
   },
+  'text-box': {
+    type: 'text-box', category: 'operations', label: 'Text Box', defaultName: 'Note', description: 'Add notes to the canvas', accent: '#f59e0b', iconPath: '', defaultInterfaces: [],
+  },
 }
 
 export const DEVICE_GROUPS: { id: DeviceCategory; label: string; description: string; types: DeviceType[] }[] = [

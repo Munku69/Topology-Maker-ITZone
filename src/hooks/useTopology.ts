@@ -71,7 +71,7 @@ export function useTopology() {
   const onEdgesChange = useCallback((changes: EdgeChange<TopologyEdge>[]) => setEdges((current) => applyEdgeChanges(changes, current)), [])
   const addConnection = useCallback((connection: Connection, data: ConnectionData) => {
     const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
-    const label = [interfaceLabel, data.description].filter(Boolean).join(' — ')
+    const label = interfaceLabel
     setEdges((current) => addEdge({ ...connection, id: newId('edge'), type: 'smoothstep', data, label, style: getCableStyle(data.cableType) }, current))
   }, [])
 
@@ -105,7 +105,7 @@ export function useTopology() {
       if (edge.id !== id) return edge
       const data: ConnectionData = { cableType: 'copper-straight', sourceInterface: '', targetInterface: '', description: '', ...edge.data, ...patch }
       const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
-      const label = [interfaceLabel, data.description].filter(Boolean).join(' — ')
+      const label = interfaceLabel
       return { ...edge, data, label, style: getCableStyle(data.cableType) }
     }))
   }, [])
@@ -126,7 +126,7 @@ export function useTopology() {
         targetInterface: edge.target === connection.target ? edge.data?.targetInterface ?? '' : '',
       }
       const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
-      const label = [interfaceLabel, data.description].filter(Boolean).join(' — ')
+      const label = interfaceLabel
       return { ...edge, ...connection, data, label }
     }))
   }, [])
@@ -235,7 +235,7 @@ export function useTopology() {
     id: project.id,
     projectName: project.projectName,
     updatedAt: project.updatedAt,
-    deviceCount: project.nodes.length,
+    deviceCount: project.nodes.filter((node) => node.data.deviceType !== 'text-box').length,
     connectionCount: project.edges.length,
   })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 

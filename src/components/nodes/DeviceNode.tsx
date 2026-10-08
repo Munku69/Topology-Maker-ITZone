@@ -7,6 +7,14 @@ import type { TopologyNode } from '../../types/topology'
 function DeviceNodeView({ id, data, selected }: NodeProps<TopologyNode>) {
   const preset = DEVICE_PRESETS[data.deviceType]
   const isConnected = useStore((state) => state.edges.some((edge) => edge.source === id || edge.target === id))
+  if (data.deviceType === 'text-box') {
+    return (
+      <div className={`text-box-node ${selected ? 'is-selected' : ''}`}>
+        <strong>{data.name || 'Note'}</strong>
+        <p>{data.description || 'Add your note in Properties.'}</p>
+      </div>
+    )
+  }
   return (
     <div className={`device-node ${selected ? 'is-selected' : ''}`} style={{ '--node-accent': preset.accent } as React.CSSProperties}>
       <div className="device-node__visual">

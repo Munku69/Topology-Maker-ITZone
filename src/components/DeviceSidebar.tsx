@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity, Cable, ChevronDown, PanelLeftClose, Radio, Shuffle, Trash2 } from 'lucide-react'
+import { Activity, Cable, ChevronDown, PanelLeftClose, Radio, Shuffle, Trash2, Type } from 'lucide-react'
 import { DEVICE_GROUPS, DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_PRESETS } from '../constants/cables'
 import type { CableType, DeviceCategory, DeviceType } from '../types/topology'
@@ -16,9 +16,11 @@ interface DeviceSidebarProps {
   onResizeStart: (event: React.PointerEvent) => void
   deleteMode: boolean
   onToggleDeleteMode: () => void
+  textToolMode: boolean
+  onToggleTextTool: () => void
 }
 
-export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, portSelection, onResizeStart, deleteMode, onToggleDeleteMode }: DeviceSidebarProps) {
+export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, portSelection, onResizeStart, deleteMode, onToggleDeleteMode, textToolMode, onToggleTextTool }: DeviceSidebarProps) {
   const [openGroups, setOpenGroups] = useState<Set<DeviceCategory>>(() => new Set(['network']))
   if (collapsed) return null
   const toggleGroup = (category: DeviceCategory) => setOpenGroups((current) => {
@@ -81,6 +83,11 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
         <p>Press Escape at any time to cancel the active cable operation.</p>
       </div>
       <div className="sidebar-tools">
+        <button className={`sidebar-text-tool ${textToolMode ? 'is-active' : ''}`} onClick={onToggleTextTool} title={textToolMode ? 'Exit text box mode' : 'Add a text box to the canvas'} aria-pressed={textToolMode}>
+          <Type size={16} />
+          <span><strong>Text box</strong><small>{textToolMode ? 'Click an empty canvas area' : 'Add a movable canvas note'}</small></span>
+          <em>{textToolMode ? 'ACTIVE' : 'TOOL'}</em>
+        </button>
         <button className={`sidebar-delete-tool ${deleteMode ? 'is-active' : ''}`} onClick={onToggleDeleteMode} title={deleteMode ? 'Exit delete mode' : 'Delete devices and cables'} aria-pressed={deleteMode}>
           <Trash2 size={16} />
           <span><strong>Delete tool</strong><small>{deleteMode ? 'Click a device or cable' : 'Remove devices and cables'}</small></span>
