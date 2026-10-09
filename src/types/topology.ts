@@ -46,6 +46,8 @@ export interface ConnectionData extends Record<string, unknown> {
   targetInterface: string
   description: string
   parallelOffset?: number
+  sourceLaneOffset?: number
+  targetLaneOffset?: number
 }
 
 export type TopologyNode = Node<DeviceData, DeviceType>

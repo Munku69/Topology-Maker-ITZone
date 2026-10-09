@@ -693,7 +693,8 @@ button { color: inherit; }
 .zone-resize-line { border-color: var(--zone-color) !important; }
 .zone-resize-handle { width: 9px !important; height: 9px !important; background: var(--itz-surface) !important; border: 2px solid var(--zone-color) !important; border-radius: 1px !important; }
 .canvas-shell.delete-mode .zone-node:hover { border-color: #fb7185 !important; box-shadow: 0 0 0 3px rgba(251, 113, 133, .25); }
-.device-node__ports { position: absolute; z-index: 6; top: 6px; left: 6px; margin: 0; padding: 2px 4px; color: #30475a; font-size: 7px; font-weight: 850; letter-spacing: .05em; background: rgba(255, 255, 255, .9); border: 1px solid #c7d5df; border-radius: 2px; }
+.device-node__ports { position: absolute; z-index: 6; top: 6px; left: 6px; display: none; margin: 0; padding: 2px 4px; color: #30475a; font-size: 7px; font-weight: 850; letter-spacing: .05em; background: rgba(255, 255, 255, .9); border: 1px solid #c7d5df; border-radius: 2px; }
+.canvas-shell.port-selection-enabled .device-node__ports { display: block; }
 .device-node__visual .device-node__status { position: absolute; z-index: 6; top: 7px; right: 7px; width: 8px; height: 8px; }
 .canvas-shell.labels-hidden .device-node__caption {
   visibility: hidden;

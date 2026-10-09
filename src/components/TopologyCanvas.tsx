@@ -53,10 +53,22 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
 
   const renderedEdges = useMemo(() => {
     const groups = new Map<string, TopologyEdge[]>()
+    const endpointGroups = new Map<string, string[]>()
     props.edges.forEach((edge) => {
       const key = [edge.source, edge.target].sort().join('::')
       groups.set(key, [...(groups.get(key) ?? []), edge])
+      const sourceKey = `${edge.source}::${edge.sourceHandle ?? 'right'}`
+      const targetKey = `${edge.target}::${edge.targetHandle ?? 'left'}`
+      endpointGroups.set(sourceKey, [...(endpointGroups.get(sourceKey) ?? []), `${edge.id}:source`])
+      endpointGroups.set(targetKey, [...(endpointGroups.get(targetKey) ?? []), `${edge.id}:target`])
     })
+
+    const endpointLaneOffset = (key: string, token: string): number => {
+      const endpointEdges = endpointGroups.get(key) ?? [token]
+      const index = endpointEdges.indexOf(token)
+      const spacing = Math.min(10, 64 / Math.max(1, endpointEdges.length - 1))
+      return (index - (endpointEdges.length - 1) / 2) * spacing
+    }
 
     return props.edges.map((edge) => {
       const key = [edge.source, edge.target].sort().join('::')
@@ -64,6 +76,8 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
       const index = group.findIndex((item) => item.id === edge.id)
       const centeredIndex = index - (group.length - 1) / 2
       const direction = edge.source.localeCompare(edge.target) <= 0 ? 1 : -1
+      const sourceKey = `${edge.source}::${edge.sourceHandle ?? 'right'}`
+      const targetKey = `${edge.target}::${edge.targetHandle ?? 'left'}`
       const data = edge.data ?? { cableType: 'copper-straight', sourceInterface: '', targetInterface: '', description: '' }
       const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
       const label = props.portSelection ? interfaceLabel : ''
@@ -72,13 +86,18 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
         type: 'parallelCable',
         zIndex: 1,
         label,
-        data: { ...data, parallelOffset: centeredIndex * 34 * direction },
+        data: {
+          ...data,
+          parallelOffset: centeredIndex * 34 * direction,
+          sourceLaneOffset: endpointLaneOffset(sourceKey, `${edge.id}:source`),
+          targetLaneOffset: endpointLaneOffset(targetKey, `${edge.id}:target`),
+        },
       }
     })
   }, [props.edges, props.portSelection])
 
   return (
-    <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.textToolMode ? 'text-mode' : ''} ${props.zoneToolMode ? 'zone-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'}`} ref={ref}>
+    <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.textToolMode ? 'text-mode' : ''} ${props.zoneToolMode ? 'zone-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'} ${props.portSelection ? 'port-selection-enabled' : ''}`} ref={ref}>
       {props.nodes.length === 0 && <div className="empty-canvas"><span className="empty-canvas__glyph">+</span><h2>Build your network</h2><p>Drag a device here to start building your topology.</p></div>}
       <ReactFlow<TopologyNode, TopologyEdge>
         nodes={renderedNodes}

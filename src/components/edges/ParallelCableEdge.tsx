@@ -1,5 +1,5 @@
-import { BaseEdge, Position, useInternalNode, type EdgeProps } from '@xyflow/react'
-import type { TopologyEdge, TopologyNode } from '../../types/topology'
+import { BaseEdge, Position, useInternalNode, useStore, type EdgeProps } from '@xyflow/react'
+import type { DeviceData, TopologyEdge, TopologyNode } from '../../types/topology'
 
 interface Point { x: number; y: number }
 interface Bounds { left: number; right: number; top: number; bottom: number }
@@ -65,12 +65,18 @@ function midpoint(points: Point[]): Point {
   return points[Math.floor(points.length / 2)] ?? { x: 0, y: 0 }
 }
 
-function visualBounds(node: ReturnType<typeof useInternalNode<TopologyNode>>): Bounds | null {
+interface MeasuredInternalNode {
+  measured?: { width?: number; height?: number }
+  internals: { positionAbsolute: Point }
+}
+
+function visualBounds(node: MeasuredInternalNode | null | undefined): Bounds | null {
   if (!node) return null
-  const width = node.measured.width ?? 150
-  const left = node.internals.positionAbsolute.x + (width - VISUAL_SIZE) / 2
+  const width = node.measured?.width ?? VISUAL_SIZE
+  const height = node.measured?.height ?? VISUAL_SIZE
+  const left = node.internals.positionAbsolute.x
   const top = node.internals.positionAbsolute.y
-  return { left, right: left + VISUAL_SIZE, top, bottom: top + VISUAL_SIZE }
+  return { left, right: left + width, top, bottom: top + height }
 }
 
 function expanded(bounds: Bounds): Bounds {
@@ -80,6 +86,16 @@ function expanded(bounds: Bounds): Bounds {
     top: bounds.top - ROUTE_CLEARANCE,
     bottom: bounds.bottom + ROUTE_CLEARANCE,
   }
+}
+
+function offsetEndpoint(point: Point, position: Position, offset: number, bounds: Bounds | null): Point {
+  if (!offset) return point
+  if (position === Position.Top || position === Position.Bottom) {
+    const x = point.x + offset
+    return { x: bounds ? Math.min(bounds.right - 4, Math.max(bounds.left + 4, x)) : x, y: point.y }
+  }
+  const y = point.y + offset
+  return { x: point.x, y: bounds ? Math.min(bounds.bottom - 4, Math.max(bounds.top + 4, y)) : y }
 }
 
 function segmentCrossesBounds(start: Point, end: Point, bounds: Bounds): boolean {
@@ -142,16 +158,27 @@ export function ParallelCableEdge({
 }: EdgeProps<TopologyEdge>) {
   const sourceNode = useInternalNode<TopologyNode>(sourceId)
   const targetNode = useInternalNode<TopologyNode>(targetId)
-  const source = { x: sourceX, y: sourceY }
-  const target = { x: targetX, y: targetY }
+  const flowNodes = useStore((state) => state.nodes)
+  const nodeLookup = useStore((state) => state.nodeLookup)
+  const sourceBounds = visualBounds(sourceNode)
+  const targetBounds = visualBounds(targetNode)
+  const source = offsetEndpoint({ x: sourceX, y: sourceY }, sourcePosition, data?.sourceLaneOffset ?? 0, sourceBounds)
+  const target = offsetEndpoint({ x: targetX, y: targetY }, targetPosition, data?.targetLaneOffset ?? 0, targetBounds)
   const sourceDirection = directions[sourcePosition]
   const targetDirection = directions[targetPosition]
   const leadLength = 22
-  const sourceLead = { x: sourceX + sourceDirection.x * leadLength, y: sourceY + sourceDirection.y * leadLength }
-  const targetLead = { x: targetX + targetDirection.x * leadLength, y: targetY + targetDirection.y * leadLength }
+  const sourceLead = { x: source.x + sourceDirection.x * leadLength, y: source.y + sourceDirection.y * leadLength }
+  const targetLead = { x: target.x + targetDirection.x * leadLength, y: target.y + targetDirection.y * leadLength }
   const offset = data?.parallelOffset ?? 0
   const horizontalStart = sourceDirection.x !== 0
-  const obstacles = [visualBounds(sourceNode), visualBounds(targetNode)].filter((bounds): bounds is Bounds => bounds !== null).map(expanded)
+  const otherDeviceBounds = flowNodes
+    .filter((node) => {
+      const deviceType = (node.data as Partial<DeviceData>).deviceType
+      return node.id !== sourceId && node.id !== targetId && deviceType !== 'zone' && deviceType !== 'text-box'
+    })
+    .map((node) => visualBounds(nodeLookup.get(node.id)))
+    .filter((bounds): bounds is Bounds => bounds !== null)
+  const obstacles = [sourceBounds, targetBounds, ...otherDeviceBounds].filter((bounds): bounds is Bounds => bounds !== null).map(expanded)
   const routed = routedLeads(sourceLead, targetLead, horizontalStart, offset, obstacles)
   const points = compactPoints([source, ...routed, target])
   const path = roundedPath(points)
