@@ -78,6 +78,11 @@ export function validateProject(value: unknown): TopologyProject {
     if (!validTypes.has(String(data.deviceType)) || data.deviceType !== node.type || typeof data.name !== 'string' || typeof data.hostname !== 'string' || typeof data.managementIp !== 'string' || typeof data.subnet !== 'string' || typeof data.description !== 'string' || !Array.isArray(data.interfaces)) {
       throw new Error('A device has invalid properties.')
     }
+    if (data.zoneColor !== undefined && typeof data.zoneColor !== 'string') throw new Error('A zone has an invalid color.')
+    if (data.zoneLineStyle !== undefined && data.zoneLineStyle !== 'solid' && data.zoneLineStyle !== 'dashed') throw new Error('A zone has an invalid border style.')
+    if (data.textBackgroundColor !== undefined && typeof data.textBackgroundColor !== 'string') throw new Error('A text box has an invalid background color.')
+    if (data.textBackgroundStyle !== undefined && data.textBackgroundStyle !== 'filled' && data.textBackgroundStyle !== 'transparent') throw new Error('A text box has an invalid background style.')
+    if (data.textColor !== undefined && typeof data.textColor !== 'string') throw new Error('A text box has an invalid text color.')
     for (const item of data.interfaces) {
       if (!item || typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.ip !== 'string' || typeof item.vlan !== 'string' || typeof item.role !== 'string' || typeof item.description !== 'string') {
         throw new Error('A device has an invalid interface.')

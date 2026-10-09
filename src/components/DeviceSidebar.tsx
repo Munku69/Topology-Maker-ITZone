@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity, Cable, ChevronDown, PanelLeftClose, Radio, Shuffle, Trash2, Type } from 'lucide-react'
+import { Activity, Cable, ChevronDown, PanelLeftClose, Radio, Shuffle, SquareDashed, Trash2, Type } from 'lucide-react'
 import { DEVICE_GROUPS, DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_PRESETS } from '../constants/cables'
 import type { CableType, DeviceCategory, DeviceType } from '../types/topology'
@@ -18,9 +18,11 @@ interface DeviceSidebarProps {
   onToggleDeleteMode: () => void
   textToolMode: boolean
   onToggleTextTool: () => void
+  zoneToolMode: boolean
+  onToggleZoneTool: () => void
 }
 
-export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, portSelection, onResizeStart, deleteMode, onToggleDeleteMode, textToolMode, onToggleTextTool }: DeviceSidebarProps) {
+export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, portSelection, onResizeStart, deleteMode, onToggleDeleteMode, textToolMode, onToggleTextTool, zoneToolMode, onToggleZoneTool }: DeviceSidebarProps) {
   const [openGroups, setOpenGroups] = useState<Set<DeviceCategory>>(() => new Set(['network']))
   if (collapsed) return null
   const toggleGroup = (category: DeviceCategory) => setOpenGroups((current) => {
@@ -83,6 +85,11 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
         <p>Press Escape at any time to cancel the active cable operation.</p>
       </div>
       <div className="sidebar-tools">
+        <button className={`sidebar-zone-tool ${zoneToolMode ? 'is-active' : ''}`} onClick={onToggleZoneTool} title={zoneToolMode ? 'Cancel zone drawing' : 'Draw a rectangular network zone'} aria-pressed={zoneToolMode}>
+          <SquareDashed size={16} />
+          <span><strong>Zone tool</strong><small>{zoneToolMode ? 'Drag a rectangle on the canvas' : 'Draw colored zone boundaries'}</small></span>
+          <em>{zoneToolMode ? 'ACTIVE' : 'TOOL'}</em>
+        </button>
         <button className={`sidebar-text-tool ${textToolMode ? 'is-active' : ''}`} onClick={onToggleTextTool} title={textToolMode ? 'Exit text box mode' : 'Add a text box to the canvas'} aria-pressed={textToolMode}>
           <Type size={16} />
           <span><strong>Text box</strong><small>{textToolMode ? 'Click an empty canvas area' : 'Add a movable canvas note'}</small></span>

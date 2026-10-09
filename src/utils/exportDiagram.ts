@@ -100,7 +100,7 @@ function addTable(pdf: jsPDF, title: string, headers: string[], rows: string[][]
 
 export async function exportTopologyPdf(projectName: string, nodes: TopologyNode[], edges: TopologyEdge[], background: ExportBackground = 'canvas'): Promise<void> {
   const rendered = await renderCompleteDiagram(nodes, background)
-  const deviceNodes = nodes.filter((node) => node.data.deviceType !== 'text-box')
+  const deviceNodes = nodes.filter((node) => node.data.deviceType !== 'text-box' && node.data.deviceType !== 'zone')
   const generated = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date())
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true })
   const pageWidth = pdf.internal.pageSize.getWidth()

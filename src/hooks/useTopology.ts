@@ -3,7 +3,7 @@ import { addEdge, applyEdgeChanges, applyNodeChanges, type Connection, type Edge
 import { createDeviceData, newId } from '../constants/devices'
 import { getCableStyle } from '../constants/cables'
 import { createBlankProject, loadProjectLibrary, newProjectId, saveProjectLibrary, type ProjectLibrary } from '../utils/project'
-import type { ConnectionData, DeviceData, DeviceInterface, DeviceType, ProjectSummary, SaveState, StoredTopologyProject, TopologyEdge, TopologyNode, TopologyProject } from '../types/topology'
+import type { ConnectionData, DeviceData, DeviceInterface, DeviceType, ProjectSummary, SaveState, StoredTopologyProject, TopologyEdge, TopologyNode, TopologyProject, ZoneLineStyle } from '../types/topology'
 
 export function useTopology() {
   const initialLibrary = useRef(loadProjectLibrary()).current
@@ -75,10 +75,25 @@ export function useTopology() {
     setEdges((current) => addEdge({ ...connection, id: newId('edge'), type: 'smoothstep', data, label, style: getCableStyle(data.cableType) }, current))
   }, [])
 
-  const addDevice = useCallback((type: DeviceType, position: { x: number; y: number }) => {
+  const addDevice = useCallback((type: DeviceType, position: { x: number; y: number }, patch: Partial<DeviceData> = {}) => {
     const id = newId('device')
-    setNodes((current) => [...current, { id, type, position, data: createDeviceData(type), selected: true }])
+    setNodes((current) => [...current, { id, type, position, data: { ...createDeviceData(type), ...patch, deviceType: type }, selected: true }])
     setNodes((current) => current.map((node) => node.id === id ? node : { ...node, selected: false }))
+    setEdges((current) => current.map((edge) => ({ ...edge, selected: false })))
+    return id
+  }, [])
+
+  const addZone = useCallback((position: { x: number; y: number }, size: { width: number; height: number }, color: string, lineStyle: ZoneLineStyle) => {
+    const id = newId('zone')
+    const data: DeviceData = {
+      ...createDeviceData('zone'),
+      name: 'Network Zone',
+      hostname: 'Network Zone',
+      zoneColor: color,
+      zoneLineStyle: lineStyle,
+    }
+    const zone: TopologyNode = { id, type: 'zone', position, width: size.width, height: size.height, data, selected: true }
+    setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), zone])
     setEdges((current) => current.map((edge) => ({ ...edge, selected: false })))
     return id
   }, [])
@@ -235,11 +250,11 @@ export function useTopology() {
     id: project.id,
     projectName: project.projectName,
     updatedAt: project.updatedAt,
-    deviceCount: project.nodes.filter((node) => node.data.deviceType !== 'text-box').length,
+    deviceCount: project.nodes.filter((node) => node.data.deviceType !== 'text-box' && node.data.deviceType !== 'zone').length,
     connectionCount: project.edges.length,
   })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
   const saveNow = useCallback(() => { persistCurrent(); setSaveState('saved') }, [persistCurrent])
 
-  return { nodes, edges, projectName, activeProjectId, projects: projectSummaries, saveState, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, reconnectConnection, addDevice, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, deleteNode, deleteEdge, clearSelection, replaceProject, switchProject, createProject, renameProject, duplicateProject, deleteProject, saveNow, getProject }
+  return { nodes, edges, projectName, activeProjectId, projects: projectSummaries, saveState, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, reconnectConnection, addDevice, addZone, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, deleteNode, deleteEdge, clearSelection, replaceProject, switchProject, createProject, renameProject, duplicateProject, deleteProject, saveNow, getProject }
 }

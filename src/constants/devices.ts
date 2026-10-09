@@ -130,6 +130,9 @@ export const DEVICE_PRESETS: Record<DeviceType, DevicePreset> = {
   'text-box': {
     type: 'text-box', category: 'operations', label: 'Text Box', defaultName: 'Note', description: 'Add notes to the canvas', accent: '#f59e0b', iconPath: '', defaultInterfaces: [],
   },
+  zone: {
+    type: 'zone', category: 'operations', label: 'Zone', defaultName: 'Network Zone', description: 'Group devices in a visual boundary', accent: '#ef4444', iconPath: '', defaultInterfaces: [],
+  },
 }
 
 export const DEVICE_GROUPS: { id: DeviceCategory; label: string; description: string; types: DeviceType[] }[] = [

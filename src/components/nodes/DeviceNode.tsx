@@ -24,7 +24,7 @@ const ICON_BOUNDS: Partial<Record<DeviceType, IconBounds>> = {
   isp: [12.4, 16.9, 12.2, 12.8],
   'l2-switch': [8.1, 22.3, 8, 19],
   switch: [9.4, 10.2, 9.7, 10.1],
-  laptop: [10.9, 23, 10.8, 22.6],
+  laptop: [1.1, 20.6, 1, 18.3],
   'load-balancer': [13.7, 10.2, 13.2, 10.1],
   'log-management': [13.3, 9.8, 13.2, 9.7],
   'mail-server': [18.4, 9.4, 18.3, 9.3],
@@ -62,10 +62,14 @@ function DeviceNodeView({ id, data, selected }: NodeProps<TopologyNode>) {
   const preset = DEVICE_PRESETS[data.deviceType]
   const isConnected = useStore((state) => state.edges.some((edge) => edge.source === id || edge.target === id))
   if (data.deviceType === 'text-box') {
+    const backgroundStyle = data.textBackgroundStyle ?? 'filled'
     return (
-      <div className={`text-box-node ${selected ? 'is-selected' : ''}`}>
-        <strong>{data.name || 'Note'}</strong>
-        <p>{data.description || 'Add your note in Properties.'}</p>
+      <div
+        className={`text-box-node ${backgroundStyle === 'transparent' ? 'is-transparent' : 'has-background'} ${data.textColor ? 'has-custom-text' : ''} ${selected ? 'is-selected' : ''}`}
+        style={{ '--text-box-background': data.textBackgroundColor ?? '#0ea5e9', '--text-box-text-color': data.textColor } as React.CSSProperties}
+      >
+        {data.name && <strong>{data.name}</strong>}
+        {data.description && <p>{data.description}</p>}
       </div>
     )
   }

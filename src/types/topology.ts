@@ -5,10 +5,14 @@ export const DEVICE_TYPES = [
   'laptop', 'mobile', 'pc', 'ip-camera', 'ip-phone',
   'server', 'web-server', 'dns-server', 'app-server', 'db-server', 'file-server', 'mail-server', 'storage-server',
   'ddos-protection', 'waf', 'edr', 'xdr', 'iam', 'pam', 'siem', 'soar', 'db-firewall', 'dlp', 'sandbox', 'ciphertrust',
-  'ups', 'log-management', 'network-monitor', 'text-box',
+  'ups', 'log-management', 'network-monitor', 'text-box', 'zone',
 ] as const
 export type DeviceType = (typeof DEVICE_TYPES)[number]
 export type DeviceCategory = 'network' | 'endpoints' | 'servers' | 'security' | 'operations'
+export type ZoneLineStyle = 'solid' | 'dashed'
+export interface ZoneToolOptions { color: string; lineStyle: ZoneLineStyle }
+export type TextBoxBackgroundStyle = 'filled' | 'transparent'
+export interface TextBoxToolOptions { backgroundStyle: TextBoxBackgroundStyle; backgroundColor: string; textColor: string }
 export const CABLE_TYPES = ['copper-straight', 'copper-crossover', 'fiber', 'serial'] as const
 export type CableType = (typeof CABLE_TYPES)[number]
 
@@ -29,6 +33,11 @@ export interface DeviceData extends Record<string, unknown> {
   subnet: string
   description: string
   interfaces: DeviceInterface[]
+  zoneColor?: string
+  zoneLineStyle?: ZoneLineStyle
+  textBackgroundStyle?: TextBoxBackgroundStyle
+  textBackgroundColor?: string
+  textColor?: string
 }
 
 export interface ConnectionData extends Record<string, unknown> {

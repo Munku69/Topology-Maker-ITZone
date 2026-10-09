@@ -1,7 +1,7 @@
-import { Cable, ChevronDown, Network, PanelRightClose, Plus, Trash2, Type, X } from 'lucide-react'
+import { Cable, ChevronDown, Network, PanelRightClose, Plus, SquareDashed, Trash2, Type, X } from 'lucide-react'
 import { DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_PRESETS } from '../constants/cables'
-import type { CableType, DeviceData, DeviceInterface, DeviceType, TopologyEdge, TopologyNode } from '../types/topology'
+import type { CableType, DeviceData, DeviceInterface, DeviceType, TextBoxBackgroundStyle, TopologyEdge, TopologyNode, ZoneLineStyle } from '../types/topology'
 
 interface PropertiesPanelProps {
   selectedNode: TopologyNode | null
@@ -39,6 +39,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   if (props.collapsed) return null
   const { selectedNode, selectedEdge } = props
   const isTextBox = selectedNode?.data.deviceType === 'text-box'
+  const isZone = selectedNode?.data.deviceType === 'zone'
   const source = selectedEdge ? props.nodes.find((n) => n.id === selectedEdge.source) : undefined
   const target = selectedEdge ? props.nodes.find((n) => n.id === selectedEdge.target) : undefined
   return (
@@ -56,21 +57,34 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
       {selectedNode && (
         <div className="inspector-scroll">
           <div className="selection-header">
-            {isTextBox
+            {isZone
+              ? <span className="selection-icon"><SquareDashed size={19} /></span>
+              : isTextBox
               ? <span className="selection-icon"><Type size={19} /></span>
               : <span className="selection-icon device-art" style={{ color: DEVICE_PRESETS[selectedNode.data.deviceType].accent }}><img src={DEVICE_PRESETS[selectedNode.data.deviceType].iconPath} alt="" /></span>}
-            <div><strong>{selectedNode.data.name || (isTextBox ? 'Note' : 'Unnamed device')}</strong><small>{isTextBox ? 'Canvas annotation' : DEVICE_PRESETS[selectedNode.data.deviceType].label}</small></div>
+            <div><strong>{selectedNode.data.name || (isZone || isTextBox ? '' : 'Unnamed device')}</strong><small>{isZone ? 'Canvas zone' : isTextBox ? 'Canvas annotation' : DEVICE_PRESETS[selectedNode.data.deviceType].label}</small></div>
             <button className="icon-button" onClick={props.onCloseSelection} title="Clear selection"><X size={16} /></button>
           </div>
-          {isTextBox ? <section className="property-section">
+          {isZone ? <section className="property-section">
+            <h3>Zone appearance</h3>
+            <Field label="Zone name" value={selectedNode.data.name} onChange={(name) => props.onUpdateNode(selectedNode.id, { name, hostname: name })} placeholder="e.g. Server Zone" />
+            <Field label="Description" value={selectedNode.data.description} onChange={(description) => props.onUpdateNode(selectedNode.id, { description })} placeholder="Purpose of this zone" multiline />
+            <label className="field"><span>Boundary color</span><div className="zone-property-color"><input type="color" value={selectedNode.data.zoneColor ?? '#ef4444'} onChange={(event) => props.onUpdateNode(selectedNode.id, { zoneColor: event.target.value })} /><code>{selectedNode.data.zoneColor ?? '#ef4444'}</code></div></label>
+            <label className="field"><span>Boundary style</span><div className="select-wrap"><select value={selectedNode.data.zoneLineStyle ?? 'dashed'} onChange={(event) => props.onUpdateNode(selectedNode.id, { zoneLineStyle: event.target.value as ZoneLineStyle })}><option value="dashed">Dashed</option><option value="solid">Solid</option></select><ChevronDown size={15} /></div></label>
+            <p className="feature-disabled-note">Drag the square handles around the selected zone to resize it.</p>
+          </section> : isTextBox ? <section className="property-section">
             <h3>Text box</h3>
             <Field label="Title" value={selectedNode.data.name} onChange={(name) => props.onUpdateNode(selectedNode.id, { name })} placeholder="e.g. Internet edge" />
             <Field label="Text" value={selectedNode.data.description} onChange={(description) => props.onUpdateNode(selectedNode.id, { description })} placeholder="Add documentation to the canvas" multiline />
+            <label className="field"><span>Background</span><div className="select-wrap"><select value={selectedNode.data.textBackgroundStyle ?? 'filled'} onChange={(event) => props.onUpdateNode(selectedNode.id, { textBackgroundStyle: event.target.value as TextBoxBackgroundStyle })}><option value="filled">Colored background</option><option value="transparent">Transparent</option></select><ChevronDown size={15} /></div></label>
+            {(selectedNode.data.textBackgroundStyle ?? 'filled') === 'filled' && <label className="field"><span>Background color</span><div className="zone-property-color"><input type="color" value={selectedNode.data.textBackgroundColor ?? '#0ea5e9'} onChange={(event) => props.onUpdateNode(selectedNode.id, { textBackgroundColor: event.target.value })} /><code>{selectedNode.data.textBackgroundColor ?? '#0ea5e9'}</code></div></label>}
+            <label className="field"><span>Text color</span><div className="zone-property-color"><input type="color" value={selectedNode.data.textColor ?? '#ffffff'} onChange={(event) => props.onUpdateNode(selectedNode.id, { textColor: event.target.value })} /><code>{selectedNode.data.textColor ?? 'Automatic'}</code></div></label>
+            {selectedNode.data.textColor && <button className="button button--small button--ghost" onClick={() => props.onUpdateNode(selectedNode.id, { textColor: undefined })}>Use theme text color</button>}
           </section> : <>
             <section className="property-section">
               <h3>Device details</h3>
               <Field label="Device name" value={selectedNode.data.name} onChange={(name) => props.onUpdateNode(selectedNode.id, { name })} placeholder="e.g. FGT-HQ" />
-              <label className="field"><span>Device type</span><div className="select-wrap"><select value={selectedNode.data.deviceType} onChange={(e) => props.onUpdateNode(selectedNode.id, { deviceType: e.target.value as DeviceType }, e.target.value as DeviceType)}>{(Object.keys(DEVICE_PRESETS) as DeviceType[]).filter((type) => type !== 'text-box').map((type) => <option key={type} value={type}>{DEVICE_PRESETS[type].label}</option>)}</select><ChevronDown size={15} /></div></label>
+              <label className="field"><span>Device type</span><div className="select-wrap"><select value={selectedNode.data.deviceType} onChange={(e) => props.onUpdateNode(selectedNode.id, { deviceType: e.target.value as DeviceType }, e.target.value as DeviceType)}>{(Object.keys(DEVICE_PRESETS) as DeviceType[]).filter((type) => type !== 'text-box' && type !== 'zone').map((type) => <option key={type} value={type}>{DEVICE_PRESETS[type].label}</option>)}</select><ChevronDown size={15} /></div></label>
               <Field label="Hostname" value={selectedNode.data.hostname} onChange={(hostname) => props.onUpdateNode(selectedNode.id, { hostname })} placeholder="e.g. FGT-HQ" />
               <Field label="Management IP" value={selectedNode.data.managementIp} onChange={(managementIp) => props.onUpdateNode(selectedNode.id, { managementIp })} placeholder="192.168.1.99/24" />
               <Field label="Subnet mask / CIDR" value={selectedNode.data.subnet} onChange={(subnet) => props.onUpdateNode(selectedNode.id, { subnet })} placeholder="255.255.255.0 or /24" />
@@ -90,7 +104,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
             ))}
             </section>
           </>}
-          <button className="danger-button" onClick={props.onDelete}><Trash2 size={16} /> Delete {isTextBox ? 'text box' : 'device'}</button>
+          <button className="danger-button" onClick={props.onDelete}><Trash2 size={16} /> Delete {isZone ? 'zone' : isTextBox ? 'text box' : 'device'}</button>
         </div>
       )}
 
