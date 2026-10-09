@@ -343,6 +343,27 @@ function App() {
   }, [notify, zoneToolMode])
 
   useEffect(() => {
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const key = event.key.toLowerCase()
+      const isUndo = key === 'z' && !event.shiftKey
+      const isRedo = key === 'y' || (key === 'z' && event.shiftKey)
+      if (!isUndo && !isRedo) return
+      event.preventDefault()
+      const changed = isUndo ? topology.undo() : topology.redo()
+      if (!changed) return
+      setSelectedNodeId(null)
+      setSelectedEdgeId(null)
+      setCableEndpoint(null)
+      setPortPrompt(null)
+    }
+    window.addEventListener('keydown', handleHistoryShortcut)
+    return () => window.removeEventListener('keydown', handleHistoryShortcut)
+  }, [topology.redo, topology.undo])
+
+  useEffect(() => {
     const context = document.modelContext
     if (!context?.registerTool) return
     const lifecycle = new AbortController()

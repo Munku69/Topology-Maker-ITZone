@@ -9,7 +9,7 @@ type IconBounds = readonly [left: number, top: number, right: number, bottom: nu
 const ICON_BOUNDS: Partial<Record<DeviceType, IconBounds>> = {
   'access-point': [22.7, 9.8, 22.6, 9.7],
   'app-server': [18.4, 9.4, 18.7, 9.3],
-  ciphertrust: [12.5, 9.8, 12.8, 9.3],
+  ciphertrust: [7.3, 7.2, 7.3, 7.7],
   'db-firewall': [14.5, 9.8, 14.7, 9.7],
   'db-server': [21.9, 9.4, 22.2, 9.3],
   'ddos-protection': [9.8, 9.4, 10.1, 9.3],
