@@ -1,6 +1,6 @@
-import type { CableType, ConnectionData, StoredTopologyProject, TopologyProject } from '../types/topology'
-import { CABLE_TYPES, DEVICE_TYPES } from '../types/topology'
-import { getCableStyle } from '../constants/cables'
+import type { CablePathStyle, CableType, ConnectionData, LinkPurpose, LinkSpeed, StoredTopologyProject, TopologyProject } from '../types/topology'
+import { CABLE_PATH_STYLES, CABLE_TYPES, DEVICE_TYPES, LINK_PURPOSES, LINK_SPEEDS } from '../types/topology'
+import { CABLE_PRESETS, getCableStyle } from '../constants/cables'
 
 export const STORAGE_KEY = 'network-topology-project'
 export const PROJECT_LIBRARY_KEY = 'network-topology-projects'
@@ -91,17 +91,30 @@ export function validateProject(value: unknown): TopologyProject {
   }
   const nodeIds = new Set(project.nodes.map((node) => node.id))
   const validCableTypes = new Set<string>(CABLE_TYPES)
+  const validCablePathStyles = new Set<string>(CABLE_PATH_STYLES)
+  const validLinkSpeeds = new Set<string>(LINK_SPEEDS)
+  const validLinkPurposes = new Set<string>(LINK_PURPOSES)
   for (const edge of project.edges) {
     if (!edge || typeof edge.id !== 'string' || typeof edge.source !== 'string' || typeof edge.target !== 'string' || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
       throw new Error('The project contains an invalid connection.')
     }
     if (edge.data && (typeof edge.data.sourceInterface !== 'string' || typeof edge.data.targetInterface !== 'string' || typeof edge.data.description !== 'string')) throw new Error('A connection has invalid properties.')
     if (edge.data?.cableType !== undefined && !validCableTypes.has(String(edge.data.cableType))) throw new Error('A connection has an invalid cable type.')
+    if (edge.data?.color !== undefined && (typeof edge.data.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(edge.data.color))) throw new Error('A connection has an invalid color.')
+    if (edge.data?.speed !== undefined && !validLinkSpeeds.has(String(edge.data.speed))) throw new Error('A connection has an invalid speed.')
+    if (edge.data?.purpose !== undefined && !validLinkPurposes.has(String(edge.data.purpose))) throw new Error('A connection has an invalid purpose.')
+    if (edge.data?.showCableType !== undefined && typeof edge.data.showCableType !== 'boolean') throw new Error('A connection has an invalid display mode.')
+    if (edge.data?.pathStyle !== undefined && !validCablePathStyles.has(String(edge.data.pathStyle))) throw new Error('A connection has an invalid path style.')
   }
   const edges = project.edges.map((edge) => {
     const cableType: CableType = edge.data?.cableType && validCableTypes.has(edge.data.cableType) ? edge.data.cableType : 'copper-straight'
     const data: ConnectionData = {
       cableType,
+      color: edge.data?.color ?? CABLE_PRESETS[cableType].color,
+      speed: edge.data?.speed && validLinkSpeeds.has(edge.data.speed) ? edge.data.speed as LinkSpeed : 'Auto',
+      purpose: edge.data?.purpose && validLinkPurposes.has(edge.data.purpose) ? edge.data.purpose as LinkPurpose : 'Data',
+      showCableType: edge.data?.showCableType ?? true,
+      pathStyle: edge.data?.pathStyle && validCablePathStyles.has(edge.data.pathStyle) ? edge.data.pathStyle as CablePathStyle : 'orthogonal',
       sourceInterface: edge.data?.sourceInterface ?? '',
       targetInterface: edge.data?.targetInterface ?? '',
       description: edge.data?.description ?? '',
@@ -113,7 +126,7 @@ export function validateProject(value: unknown): TopologyProject {
       targetHandle: edge.targetHandle ?? 'left',
       data,
       label: [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ '),
-      style: getCableStyle(cableType),
+      style: getCableStyle(cableType, data.color),
     }
   })
   return {

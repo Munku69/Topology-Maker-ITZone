@@ -24,25 +24,8 @@ function compactPoints(points: Point[]): Point[] {
   })
 }
 
-function roundedBend(previous: Point, point: Point, next: Point, radius: number): string {
-  const incoming = Math.hypot(point.x - previous.x, point.y - previous.y)
-  const outgoing = Math.hypot(next.x - point.x, next.y - point.y)
-  const size = Math.min(radius, incoming / 2, outgoing / 2)
-  const before = {
-    x: point.x + (previous.x - point.x) / Math.max(incoming, 1) * size,
-    y: point.y + (previous.y - point.y) / Math.max(incoming, 1) * size,
-  }
-  const after = {
-    x: point.x + (next.x - point.x) / Math.max(outgoing, 1) * size,
-    y: point.y + (next.y - point.y) / Math.max(outgoing, 1) * size,
-  }
-  return `L ${before.x},${before.y} Q ${point.x},${point.y} ${after.x},${after.y}`
-}
-
-function roundedPath(points: Point[], radius = 8): string {
-  let path = `M ${points[0]!.x},${points[0]!.y}`
-  for (let index = 1; index < points.length - 1; index += 1) path += ` ${roundedBend(points[index - 1]!, points[index]!, points[index + 1]!, radius)}`
-  return `${path} L ${points[points.length - 1]!.x},${points[points.length - 1]!.y}`
+function rightAnglePath(points: Point[]): string {
+  return points.slice(1).reduce((path, point) => `${path} L ${point.x},${point.y}`, `M ${points[0]!.x},${points[0]!.y}`)
 }
 
 function midpoint(points: Point[]): Point {
@@ -63,6 +46,21 @@ function midpoint(points: Point[]): Point {
     travelled += segmentLength
   }
   return points[Math.floor(points.length / 2)] ?? { x: 0, y: 0 }
+}
+
+function bezierPath(source: Point, target: Point, sourceDirection: Point, targetDirection: Point, laneOffset: number): { path: string; label: Point } {
+  const dx = target.x - source.x
+  const dy = target.y - source.y
+  const length = Math.max(1, Math.hypot(dx, dy))
+  const controlDistance = Math.max(45, Math.min(180, length * 0.45))
+  const normal = { x: -dy / length, y: dx / length }
+  const controlOne = { x: source.x + sourceDirection.x * controlDistance + normal.x * laneOffset, y: source.y + sourceDirection.y * controlDistance + normal.y * laneOffset }
+  const controlTwo = { x: target.x + targetDirection.x * controlDistance + normal.x * laneOffset, y: target.y + targetDirection.y * controlDistance + normal.y * laneOffset }
+  const label = {
+    x: (source.x + 3 * controlOne.x + 3 * controlTwo.x + target.x) / 8,
+    y: (source.y + 3 * controlOne.y + 3 * controlTwo.y + target.y) / 8,
+  }
+  return { path: `M ${source.x},${source.y} C ${controlOne.x},${controlOne.y} ${controlTwo.x},${controlTwo.y} ${target.x},${target.y}`, label }
 }
 
 interface MeasuredInternalNode {
@@ -179,10 +177,22 @@ export function ParallelCableEdge({
     .map((node) => visualBounds(nodeLookup.get(node.id)))
     .filter((bounds): bounds is Bounds => bounds !== null)
   const obstacles = [sourceBounds, targetBounds, ...otherDeviceBounds].filter((bounds): bounds is Bounds => bounds !== null).map(expanded)
-  const routed = routedLeads(sourceLead, targetLead, horizontalStart, offset, data?.routingLaneIndex ?? 0, obstacles)
-  const points = compactPoints([source, ...routed, target])
-  const path = roundedPath(points)
-  const labelPoint = midpoint(points)
+  const pathStyle = data?.pathStyle ?? 'orthogonal'
+  let path: string
+  let labelPoint: Point
+  if (pathStyle === 'straight') {
+    path = `M ${source.x},${source.y} L ${target.x},${target.y}`
+    labelPoint = { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 }
+  } else if (pathStyle === 'curved') {
+    const curve = bezierPath(source, target, sourceDirection, targetDirection, offset)
+    path = curve.path
+    labelPoint = curve.label
+  } else {
+    const routed = routedLeads(sourceLead, targetLead, horizontalStart, offset, data?.routingLaneIndex ?? 0, obstacles)
+    const points = compactPoints([source, ...routed, target])
+    path = rightAnglePath(points)
+    labelPoint = midpoint(points)
+  }
 
   return <BaseEdge
     id={id}

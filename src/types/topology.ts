@@ -15,6 +15,12 @@ export type TextBoxBackgroundStyle = 'filled' | 'transparent'
 export interface TextBoxToolOptions { backgroundStyle: TextBoxBackgroundStyle; backgroundColor: string; textColor: string }
 export const CABLE_TYPES = ['copper-straight', 'copper-crossover', 'fiber', 'serial'] as const
 export type CableType = (typeof CABLE_TYPES)[number]
+export const CABLE_PATH_STYLES = ['straight', 'curved', 'orthogonal'] as const
+export type CablePathStyle = (typeof CABLE_PATH_STYLES)[number]
+export const LINK_SPEEDS = ['Auto', '10 Mbps', '100 Mbps', '1 Gbps', '2.5 Gbps', '5 Gbps', '10 Gbps', '25 Gbps', '40 Gbps', '50 Gbps', '100 Gbps', '200 Gbps', '400 Gbps', '800 Gbps'] as const
+export type LinkSpeed = (typeof LINK_SPEEDS)[number]
+export const LINK_PURPOSES = ['Data', 'LAN', 'WAN', 'Internet', 'Uplink', 'Trunk', 'Management', 'HA', 'Heartbeat', 'Sync', 'Cluster', 'Stacking', 'Storage', 'Replication', 'Backup', 'Console', 'Other'] as const
+export type LinkPurpose = (typeof LINK_PURPOSES)[number]
 
 export interface DeviceInterface {
   id: string
@@ -42,6 +48,11 @@ export interface DeviceData extends Record<string, unknown> {
 
 export interface ConnectionData extends Record<string, unknown> {
   cableType: CableType
+  color: string
+  speed: LinkSpeed
+  purpose: LinkPurpose
+  showCableType: boolean
+  pathStyle: CablePathStyle
   sourceInterface: string
   targetInterface: string
   description: string

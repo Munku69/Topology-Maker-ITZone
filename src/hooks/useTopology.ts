@@ -189,7 +189,7 @@ export function useTopology() {
     recordHistory()
     const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
     const label = interfaceLabel
-    setEdges((current) => addEdge({ ...connection, id: newId('edge'), type: 'smoothstep', data, label, style: getCableStyle(data.cableType) }, current))
+    setEdges((current) => addEdge({ ...connection, id: newId('edge'), type: 'smoothstep', data, label, style: getCableStyle(data.cableType, data.color) }, current))
   }, [recordHistory])
 
   const addDevice = useCallback((type: DeviceType, position: { x: number; y: number }, patch: Partial<DeviceData> = {}) => {
@@ -242,10 +242,10 @@ export function useTopology() {
     recordHistory(`edge:${id}:${Object.keys(patch).sort().join(',')}`)
     setEdges((current) => current.map((edge) => {
       if (edge.id !== id) return edge
-      const data: ConnectionData = { cableType: 'copper-straight', sourceInterface: '', targetInterface: '', description: '', ...edge.data, ...patch }
+      const data: ConnectionData = { cableType: 'copper-straight', color: '#38bdf8', speed: 'Auto', purpose: 'Data', showCableType: true, pathStyle: 'straight', sourceInterface: '', targetInterface: '', description: '', ...edge.data, ...patch }
       const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
       const label = interfaceLabel
-      return { ...edge, data, label, style: getCableStyle(data.cableType) }
+      return { ...edge, data, label, style: getCableStyle(data.cableType, data.color) }
     }))
   }, [recordHistory])
 
@@ -255,6 +255,11 @@ export function useTopology() {
       if (edge.id !== oldEdge.id) return edge
       const existing: ConnectionData = {
         cableType: 'copper-straight',
+        color: '#38bdf8',
+        speed: 'Auto',
+        purpose: 'Data',
+        showCableType: true,
+        pathStyle: 'straight',
         sourceInterface: '',
         targetInterface: '',
         description: '',

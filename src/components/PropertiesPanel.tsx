@@ -1,7 +1,7 @@
 import { Cable, ChevronDown, Network, PanelRightClose, Plus, SquareDashed, Trash2, Type, X } from 'lucide-react'
 import { DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_PRESETS } from '../constants/cables'
-import type { CableType, DeviceData, DeviceInterface, DeviceType, TextBoxBackgroundStyle, TopologyEdge, TopologyNode, ZoneLineStyle } from '../types/topology'
+import { LINK_PURPOSES, LINK_SPEEDS, type CablePathStyle, type CableType, type DeviceData, type DeviceInterface, type DeviceType, type LinkPurpose, type LinkSpeed, type TextBoxBackgroundStyle, type TopologyEdge, type TopologyNode, type ZoneLineStyle } from '../types/topology'
 
 interface PropertiesPanelProps {
   selectedNode: TopologyNode | null
@@ -113,7 +113,13 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
           <div className="selection-header"><span className="selection-icon"><Cable size={19} /></span><div><strong>Connection</strong><small>{source?.data.name ?? 'Source'} → {target?.data.name ?? 'Target'}</small></div><button className="icon-button" onClick={props.onCloseSelection}><X size={16} /></button></div>
           <section className="property-section">
             <h3>Connection details</h3>
-            <label className="field"><span>Cable type</span><div className="select-wrap"><select value={selectedEdge.data?.cableType ?? 'copper-straight'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { cableType: event.target.value as CableType })}>{(Object.keys(CABLE_PRESETS) as CableType[]).map((type) => <option key={type} value={type}>{CABLE_PRESETS[type].label}</option>)}</select><ChevronDown size={15} /></div></label>
+            {props.portSelection ? <label className="field"><span>Cable type</span><div className="select-wrap"><select value={selectedEdge.data?.cableType ?? 'copper-straight'} onChange={(event) => { const cableType = event.target.value as CableType; props.onUpdateEdge(selectedEdge.id, { cableType, color: CABLE_PRESETS[cableType].color, showCableType: true }) }}>{(Object.keys(CABLE_PRESETS) as CableType[]).map((type) => <option key={type} value={type}>{CABLE_PRESETS[type].label}</option>)}</select><ChevronDown size={15} /></div></label> : <p className="feature-disabled-note"><strong>Simple cable mode.</strong> Enable Choose ports to select Ethernet, crossover, fiber, or serial types.</p>}
+            <label className="field"><span>Path style</span><div className="select-wrap"><select value={selectedEdge.data?.pathStyle ?? 'straight'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { pathStyle: event.target.value as CablePathStyle })}><option value="straight">Straight</option><option value="curved">Curved</option><option value="orthogonal">90° turns</option></select><ChevronDown size={15} /></div></label>
+            <label className="field"><span>Cable color</span><div className="zone-property-color"><input type="color" value={selectedEdge.data?.color ?? CABLE_PRESETS[selectedEdge.data?.cableType ?? 'copper-straight'].color} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { color: event.target.value })} /><code>{selectedEdge.data?.color ?? CABLE_PRESETS[selectedEdge.data?.cableType ?? 'copper-straight'].color}</code></div></label>
+            <div className="two-col">
+              <label className="field"><span>Link speed</span><div className="select-wrap"><select value={selectedEdge.data?.speed ?? 'Auto'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { speed: event.target.value as LinkSpeed })}>{LINK_SPEEDS.map((speed) => <option key={speed}>{speed}</option>)}</select><ChevronDown size={15} /></div></label>
+              <label className="field"><span>Purpose</span><div className="select-wrap"><select value={selectedEdge.data?.purpose ?? 'Data'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { purpose: event.target.value as LinkPurpose })}>{LINK_PURPOSES.map((purpose) => <option key={purpose}>{purpose}</option>)}</select><ChevronDown size={15} /></div></label>
+            </div>
             {props.portSelection ? <>
               <PortField label={`Source interface · ${source?.data.name ?? ''}`} value={selectedEdge.data?.sourceInterface ?? ''} interfaces={source?.data.interfaces ?? []} onChange={(sourceInterface) => props.onUpdateEdge(selectedEdge.id, { sourceInterface })} />
               <PortField label={`Destination interface · ${target?.data.name ?? ''}`} value={selectedEdge.data?.targetInterface ?? ''} interfaces={target?.data.interfaces ?? []} onChange={(targetInterface) => props.onUpdateEdge(selectedEdge.id, { targetInterface })} />

@@ -9,6 +9,7 @@ import '@xyflow/react/dist/style.css'
 import { DeviceNode } from './nodes/DeviceNode'
 import { ZoneNode } from './nodes/ZoneNode'
 import { DEVICE_PRESETS } from '../constants/devices'
+import { CABLE_PRESETS } from '../constants/cables'
 import { DEVICE_TYPES, type DeviceType, type TopologyEdge, type TopologyNode, type ZoneToolOptions } from '../types/topology'
 import { ParallelCableEdge } from './edges/ParallelCableEdge'
 import { nearestOutlineHandle } from '../constants/attachments'
@@ -54,7 +55,13 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
   const renderedEdges = useMemo(() => {
     const endpointGroups = new Map<string, string[]>()
     const routeGroups = new Map<string, string[]>()
+    const speedGroups = new Map<string, string[]>()
     const nodeById = new Map(props.nodes.map((node) => [node.id, node]))
+    const speedGroupKey = (edge: TopologyEdge): string => {
+      const pair = [edge.source, edge.target].sort().join('::')
+      return `${pair}::${edge.data?.speed ?? 'Auto'}::${edge.data?.purpose ?? 'Data'}::${edge.data?.cableType ?? 'copper-straight'}::${edge.data?.color ?? '#38bdf8'}`
+    }
+    const compactSpeed = (speed: string): string => speed === 'Auto' ? '' : speed.replace(' Mbps', 'M').replace(' Gbps', 'G')
     const isHorizontalHandle = (handleId: string | null | undefined): boolean => {
       const handle = handleId ?? 'right'
       return handle.includes('left') || handle.includes('right')
@@ -79,6 +86,10 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
       endpointGroups.set(sourceKey, [...(endpointGroups.get(sourceKey) ?? []), `${edge.id}:source`])
       endpointGroups.set(targetKey, [...(endpointGroups.get(targetKey) ?? []), `${edge.id}:target`])
       routeGroups.set(routeKey, [...(routeGroups.get(routeKey) ?? []), edge.id])
+      if ((edge.data?.speed ?? 'Auto') !== 'Auto') {
+        const groupKey = speedGroupKey(edge)
+        speedGroups.set(groupKey, [...(speedGroups.get(groupKey) ?? []), edge.id])
+      }
     })
 
     const endpointLaneOffset = (key: string, token: string): number => {
@@ -94,9 +105,12 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
       const routeGroup = routeGroups.get(routeGroupKey(edge)) ?? [edge.id]
       const routeIndex = routeGroup.indexOf(edge.id)
       const centeredRouteIndex = routeIndex - (routeGroup.length - 1) / 2
-      const data = edge.data ?? { cableType: 'copper-straight', sourceInterface: '', targetInterface: '', description: '' }
+      const data = edge.data ?? { cableType: 'copper-straight', color: '#38bdf8', speed: 'Auto', purpose: 'Data', showCableType: true, pathStyle: 'orthogonal', sourceInterface: '', targetInterface: '', description: '' }
       const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
-      const label = props.portSelection ? interfaceLabel : ''
+      const speedGroup = data.speed === 'Auto' ? [] : speedGroups.get(speedGroupKey(edge)) ?? [edge.id]
+      const showSpeedLabel = speedGroup[0] === edge.id
+      const speedLabel = showSpeedLabel ? `${speedGroup.length > 1 ? `${speedGroup.length} x ` : ''}${compactSpeed(data.speed)}` : ''
+      const label = [speedLabel, props.portSelection ? interfaceLabel : ''].filter(Boolean).join('  ·  ')
       return {
         ...edge,
         type: 'parallelCable',
@@ -112,6 +126,22 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
       }
     })
   }, [props.edges, props.nodes, props.portSelection])
+
+  const cableLegend = useMemo(() => {
+    const entries = new Map<string, { color: string; dash?: string; width: number; label: string }>()
+    props.edges.forEach((edge) => {
+      const cableType = edge.data?.cableType ?? 'copper-straight'
+      const preset = CABLE_PRESETS[cableType]
+      const color = edge.data?.color ?? preset.color
+      const configuredSpeed = edge.data?.speed ?? 'Auto'
+      const label = configuredSpeed === 'Auto'
+        ? 'Auto'
+        : configuredSpeed.replace(' Mbps', 'M').replace(' Gbps', 'G')
+      const key = `${color}|${preset.dash ?? ''}|${label}`
+      if (!entries.has(key)) entries.set(key, { color, dash: preset.dash, width: cableType === 'fiber' ? 3 : 2.25, label })
+    })
+    return [...entries.values()]
+  }, [props.edges])
 
   return (
     <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.textToolMode ? 'text-mode' : ''} ${props.zoneToolMode ? 'zone-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'} ${props.portSelection ? 'port-selection-enabled' : ''}`} ref={ref}>
@@ -142,7 +172,7 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
           if (!type) return
           props.onDropDevice(type, { x: event.clientX, y: event.clientY })
         }}
-        defaultEdgeOptions={{ type: 'smoothstep', style: { stroke: '#5990ad', strokeWidth: 2 }, labelStyle: { fill: '#9fb7c8', fontSize: 11, fontWeight: 600 }, labelBgStyle: { fill: '#0b1726', fillOpacity: 0.9 }, labelBgPadding: [5, 3], labelBgBorderRadius: 4 }}
+        defaultEdgeOptions={{ type: 'smoothstep', style: { stroke: '#5990ad', strokeWidth: 2 }, labelStyle: { fill: 'var(--edge-label-text)', fontSize: 11, fontWeight: 700 }, labelBgStyle: { fill: 'var(--edge-label-bg)', fillOpacity: 0.96, stroke: 'var(--edge-label-border)', strokeWidth: 0.75 }, labelBgPadding: [5, 3], labelBgBorderRadius: 4 }}
         nodesConnectable
         edgesReconnectable
         reconnectRadius={24}
@@ -161,6 +191,15 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
         <Controls position="bottom-left" showInteractive={false} />
         <MiniMap<TopologyNode> position="bottom-right" pannable zoomable nodeStrokeWidth={3} style={{ width: 160, height: 105 }} maskColor="rgba(3, 9, 17, .68)" nodeColor={(node) => node.data.deviceType === 'zone' ? node.data.zoneColor ?? '#ef4444' : DEVICE_PRESETS[(node.type ?? 'router') as DeviceType]?.accent ?? '#0d6efd'} />
         <div className="canvas-badge">CANVAS · {props.nodes.filter((node) => node.data.deviceType !== 'text-box' && node.data.deviceType !== 'zone').length} DEVICES · {props.edges.length} LINK{props.edges.length === 1 ? '' : 'S'}{props.showCables ? '' : ' · HIDDEN'}</div>
+        <aside className="topology-legend" aria-label="Connection legend">
+          <div className="topology-legend__heading"><strong>LEGEND</strong><span>{cableLegend.length} STYLE{cableLegend.length === 1 ? '' : 'S'}</span></div>
+          {cableLegend.length ? <div className="topology-legend__items">{cableLegend.map((item) => (
+            <div className="topology-legend__item" key={`${item.color}-${item.dash ?? 'solid'}-${item.label}`}>
+              <i style={{ '--legend-color': item.color, '--legend-width': `${item.width}px`, '--legend-dash': item.dash ? 'dashed' : 'solid' } as React.CSSProperties} />
+              <span>{item.label}</span>
+            </div>
+          ))}</div> : <p>No cables yet</p>}
+        </aside>
         {props.cableStatus && <div className="cable-mode-badge"><span />{props.cableStatus}<kbd>ESC</kbd></div>}
         {props.deleteMode && <div className="delete-mode-badge"><Trash2 size={14} />Click a device or cable to remove it<kbd>ESC</kbd></div>}
         {props.textToolMode && <div className="text-mode-badge"><Type size={14} />Click the canvas to place a text box<kbd>ESC</kbd></div>}

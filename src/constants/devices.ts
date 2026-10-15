@@ -1,5 +1,5 @@
 import type { CableType, DeviceCategory, DeviceData, DeviceInterface, DeviceType, TopologyEdge, TopologyNode } from '../types/topology'
-import { getCableStyle } from './cables'
+import { CABLE_PRESETS, getCableStyle } from './cables'
 
 export interface DevicePreset {
   type: DeviceType
@@ -29,7 +29,7 @@ export const DEVICE_PRESETS: Record<DeviceType, DevicePreset> = {
     defaultInterfaces: [iface('Gi0/0', 'WAN'), iface('Gi0/1', 'LAN')],
   },
   'l2-switch': {
-    type: 'l2-switch', category: 'network', label: 'L2 Switch', defaultName: 'ACCESS-SW1', description: 'Layer 2 access switching', accent: '#22d3ee', iconPath: '/device-icons/l2-switch.png',
+    type: 'l2-switch', category: 'network', label: 'L2 Switch', defaultName: 'ACCESS-SW1', description: 'Layer 2 access switching', accent: '#22d3ee', iconPath: '/device-icons/l2-switch.png?v=option-3-transparent',
     defaultInterfaces: [iface('Gi0/1', 'Trunk'), iface('Gi0/2', 'Access'), iface('Fa0/1', 'Access'), iface('Fa0/2', 'Access')],
   },
   switch: {
@@ -177,7 +177,7 @@ export function createDemoTopology(): { nodes: TopologyNode[]; edges: TopologyEd
   const makeEdge = (id: string, source: string, target: string, sourceInterface: string, targetInterface: string, cableType: CableType = 'copper-straight'): TopologyEdge => ({
     id, source, target, type: 'smoothstep', animated: false,
     sourceHandle: 'bottom', targetHandle: 'top',
-    data: { cableType, sourceInterface, targetInterface, description: '' },
+    data: { cableType, color: CABLE_PRESETS[cableType].color, speed: 'Auto', purpose: 'Data', showCableType: true, pathStyle: 'orthogonal', sourceInterface, targetInterface, description: '' },
     label: [sourceInterface, targetInterface].filter(Boolean).join('  ·  '),
     style: getCableStyle(cableType),
   })

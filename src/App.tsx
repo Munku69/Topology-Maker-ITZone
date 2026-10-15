@@ -7,7 +7,7 @@ import { PortSelectionDialog } from './components/PortSelectionDialog'
 import { PropertiesPanel } from './components/PropertiesPanel'
 import { ProjectManagerDialog } from './components/ProjectManagerDialog'
 import { Toasts, type ToastKind, type ToastMessage } from './components/Toast'
-import { Toolbar, type ExportBackground } from './components/Toolbar'
+import { Toolbar } from './components/Toolbar'
 import { TopologyCanvas } from './components/TopologyCanvas'
 import { TextBoxToolDialog } from './components/TextBoxToolDialog'
 import { ZoneToolDialog } from './components/ZoneToolDialog'
@@ -17,7 +17,8 @@ import { useTopology } from './hooks/useTopology'
 import { useTheme } from './hooks/useTheme'
 import { useFeatureSettings } from './hooks/useFeatureSettings'
 import { usePanelSizes } from './hooks/usePanelSizes'
-import { DEVICE_TYPES, type CableType, type DeviceType, type ProjectSummary, type TextBoxBackgroundStyle, type TextBoxToolOptions, type TopologyEdge, type TopologyNode, type TopologyProject, type ZoneLineStyle, type ZoneToolOptions } from './types/topology'
+import { DEVICE_TYPES, type CablePathStyle, type CableType, type DeviceType, type LinkPurpose, type LinkSpeed, type ProjectSummary, type TextBoxBackgroundStyle, type TextBoxToolOptions, type TopologyEdge, type TopologyNode, type TopologyProject, type ZoneLineStyle, type ZoneToolOptions } from './types/topology'
+import type { ExportBackground, PdfExportDetails, PdfLayout } from './types/export'
 import { downloadJson, validateProject } from './utils/project'
 
 type PendingAction = { type: 'new' } | { type: 'demo' } | { type: 'import'; project: TopologyProject }
@@ -39,6 +40,10 @@ function App() {
   const [projectManagerOpen, setProjectManagerOpen] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<ProjectSummary | null>(null)
   const [selectedCable, setSelectedCable] = useState<CableType | null>(null)
+  const [cableColor, setCableColor] = useState('#38bdf8')
+  const [cableSpeed, setCableSpeed] = useState<LinkSpeed>('Auto')
+  const [cablePurpose, setCablePurpose] = useState<LinkPurpose>('Data')
+  const [cablePathStyle, setCablePathStyle] = useState<CablePathStyle>('straight')
   const [deleteMode, setDeleteMode] = useState(false)
   const [textToolMode, setTextToolMode] = useState(false)
   const [textDialogOpen, setTextDialogOpen] = useState(false)
@@ -110,12 +115,12 @@ function App() {
     }
   }
 
-  const performExport = async (kind: 'pdf' | 'png', background: ExportBackground) => {
+  const performExport = async (kind: 'pdf' | 'png', background: ExportBackground, pdfLayout: PdfLayout = 'standard', pdfDetails: PdfExportDetails = { author: '', notes: '' }) => {
     if (!topology.nodes.length) { notify('info', 'Add at least one device or text box before exporting a diagram.'); return }
     setExporting(true)
     try {
       const { exportTopologyPdf, exportTopologyPng } = await import('./utils/exportDiagram')
-      if (kind === 'pdf') await exportTopologyPdf(topology.projectName, topology.nodes, topology.edges, background)
+      if (kind === 'pdf') await exportTopologyPdf(topology.projectName, topology.nodes, topology.edges, background, pdfLayout, pdfDetails)
       else await exportTopologyPng(topology.projectName, topology.nodes, background)
       notify('success', `${kind.toUpperCase()} exported with a ${background === 'white' ? 'white' : 'canvas'} background.`)
     } catch (error) {
@@ -153,9 +158,10 @@ function App() {
       notify('info', 'Cable tool cancelled.')
       return
     }
+    if (settings.portSelection) setCableColor(CABLE_PRESETS[type].color)
     setSelectedCable(type); setCableEndpoint(null); setPortPrompt(null)
     clearSelection()
-    notify('info', `${CABLE_PRESETS[type].label} selected. Click the first device.`)
+    notify('info', `${settings.portSelection ? CABLE_PRESETS[type].label : 'Cable'} selected. Click the first device.`)
   }
 
   const connectCableToNode = (targetNode: TopologyNode, targetInterface: string, targetHandleId: string) => {
@@ -172,10 +178,11 @@ function App() {
       sourceHandle: cableEndpoint.handleId,
       targetHandle: targetHandleId,
     }
-    topology.addConnection(connection, { cableType: selectedCable, sourceInterface: cableEndpoint.interfaceName, targetInterface, description: '' })
+    topology.addConnection(connection, { cableType: selectedCable, color: cableColor, speed: cableSpeed, purpose: cablePurpose, showCableType: settings.portSelection, pathStyle: cablePathStyle, sourceInterface: cableEndpoint.interfaceName, targetInterface, description: '' })
     const sourceLabel = [sourceNode.data.name, cableEndpoint.interfaceName].filter(Boolean).join(' ')
     const targetLabel = [targetNode.data.name, targetInterface].filter(Boolean).join(' ')
-    notify('success', `${CABLE_PRESETS[selectedCable].shortLabel}: ${sourceLabel} connected to ${targetLabel}.`)
+    const connectionLabel = [cablePurpose !== 'Data' ? cablePurpose : '', cableSpeed !== 'Auto' ? cableSpeed : '', settings.portSelection ? CABLE_PRESETS[selectedCable].shortLabel : 'Cable'].filter(Boolean).join(' / ')
+    notify('success', `${connectionLabel}: ${sourceLabel} connected to ${targetLabel}.`)
     setCableEndpoint(null); setPortPrompt(null)
   }
 
@@ -390,9 +397,9 @@ function App() {
 
   return (
     <div className={`app-shell ${leftCollapsed ? 'left-collapsed' : ''} ${rightCollapsed ? 'right-collapsed' : ''}`} style={{ '--library-width': `${panelSizes.left}px`, '--inspector-width': `${panelSizes.right}px` } as React.CSSProperties}>
-      <Toolbar projectName={topology.projectName} saveState={topology.saveState} leftCollapsed={leftCollapsed} rightCollapsed={rightCollapsed} onProjectNameChange={topology.setProjectName} onManageProjects={() => setProjectManagerOpen(true)} onNew={() => requestAction({ type: 'new' })} onSave={() => { topology.saveNow(); notify('success', 'Project saved locally.') }} onImport={() => fileInputRef.current?.click()} onExportJson={() => { downloadJson(topology.getProject()); notify('success', 'Editable project downloaded.') }} onExportPdf={() => setExportDialog('pdf')} onExportPng={() => setExportDialog('png')} onLoadDemo={() => requestAction({ type: 'demo' })} onToggleLeft={() => setLeftCollapsed(false)} onToggleRight={() => setRightCollapsed(false)} exporting={exporting} theme={theme} onToggleTheme={toggleTheme} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onShowCablesChange={(value) => { setFeature('showCables', value); if (!value) clearSelection(); notify('info', value ? 'Cables are visible.' : 'Cables are hidden.') }} onPortSelectionChange={(value) => { setFeature('portSelection', value); setCableEndpoint(null); setPortPrompt(null); notify('info', value ? 'Port selection enabled.' : 'Port selection disabled.') }} onShowDeviceLabelsChange={(value) => { setFeature('showDeviceLabels', value); notify('info', value ? 'Device labels are visible.' : 'Device labels are hidden.') }} />
-      <DeviceSidebar collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(true)} selectedCable={selectedCable} cableStartLabel={cableStartNode ? `${cableStartNode.data.name} ${cableEndpoint?.interfaceName ?? ''}` : null} onSelectCable={selectCableTool} portSelection={settings.portSelection} onResizeStart={startLeftResize} deleteMode={deleteMode} onToggleDeleteMode={toggleDeleteMode} textToolMode={textToolMode} onToggleTextTool={toggleTextTool} zoneToolMode={zoneToolMode} onToggleZoneTool={toggleZoneTool} />
-      <TopologyCanvas ref={canvasRef} nodes={topology.nodes} edges={topology.edges} onNodesChange={topology.onNodesChange} onEdgesChange={topology.onEdgesChange} onInit={setFlow} onSelectionChange={onSelectionChange} onNodeClick={handleCableNodeClick} onEdgeClick={handleDeleteEdge} onReconnect={topology.reconnectConnection} cableMode={Boolean(selectedCable)} deleteMode={deleteMode} textToolMode={textToolMode} zoneToolMode={zoneToolMode} zoneOptions={zoneOptions} cableSourceNodeId={cableEndpoint?.nodeId ?? null} cableStatus={selectedCable ? cableEndpoint ? `${CABLE_PRESETS[selectedCable].shortLabel}: click the second device` : `${CABLE_PRESETS[selectedCable].shortLabel}: click the first device` : null} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onAddTextBox={addTextBoxAt} onDrawZone={drawZone} onDropDevice={(type, point) => { if (!flow) return; const position = flow.screenToFlowPosition(point); const id = topology.addDevice(type, position); setSelectedNodeId(id); setSelectedEdgeId(null) }} />
+      <Toolbar projectName={topology.projectName} saveState={topology.saveState} leftCollapsed={leftCollapsed} rightCollapsed={rightCollapsed} onProjectNameChange={topology.setProjectName} onManageProjects={() => setProjectManagerOpen(true)} onNew={() => requestAction({ type: 'new' })} onSave={() => { topology.saveNow(); notify('success', 'Project saved locally.') }} onImport={() => fileInputRef.current?.click()} onExportJson={() => { downloadJson(topology.getProject()); notify('success', 'Editable project downloaded.') }} onExportPdf={() => setExportDialog('pdf')} onExportPng={() => setExportDialog('png')} onLoadDemo={() => requestAction({ type: 'demo' })} onToggleLeft={() => setLeftCollapsed(false)} onToggleRight={() => setRightCollapsed(false)} exporting={exporting} theme={theme} onToggleTheme={toggleTheme} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onShowCablesChange={(value) => { setFeature('showCables', value); if (!value) clearSelection(); notify('info', value ? 'Cables are visible.' : 'Cables are hidden.') }} onPortSelectionChange={(value) => { setFeature('portSelection', value); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); notify('info', value ? 'Port selection enabled. Cable types are available.' : 'Port selection disabled. Connections use the simple cable tool.') }} onShowDeviceLabelsChange={(value) => { setFeature('showDeviceLabels', value); notify('info', value ? 'Device labels are visible.' : 'Device labels are hidden.') }} />
+      <DeviceSidebar collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(true)} selectedCable={selectedCable} cableStartLabel={cableStartNode ? `${cableStartNode.data.name} ${cableEndpoint?.interfaceName ?? ''}` : null} onSelectCable={selectCableTool} cableColor={cableColor} cableSpeed={cableSpeed} cablePurpose={cablePurpose} cablePathStyle={cablePathStyle} onCableColorChange={setCableColor} onCableSpeedChange={setCableSpeed} onCablePurposeChange={setCablePurpose} onCablePathStyleChange={setCablePathStyle} portSelection={settings.portSelection} onResizeStart={startLeftResize} deleteMode={deleteMode} onToggleDeleteMode={toggleDeleteMode} textToolMode={textToolMode} onToggleTextTool={toggleTextTool} zoneToolMode={zoneToolMode} onToggleZoneTool={toggleZoneTool} />
+      <TopologyCanvas ref={canvasRef} nodes={topology.nodes} edges={topology.edges} onNodesChange={topology.onNodesChange} onEdgesChange={topology.onEdgesChange} onInit={setFlow} onSelectionChange={onSelectionChange} onNodeClick={handleCableNodeClick} onEdgeClick={handleDeleteEdge} onReconnect={topology.reconnectConnection} cableMode={Boolean(selectedCable)} deleteMode={deleteMode} textToolMode={textToolMode} zoneToolMode={zoneToolMode} zoneOptions={zoneOptions} cableSourceNodeId={cableEndpoint?.nodeId ?? null} cableStatus={selectedCable ? cableEndpoint ? `${settings.portSelection ? CABLE_PRESETS[selectedCable].shortLabel : 'Cable'}: click the second device` : `${settings.portSelection ? CABLE_PRESETS[selectedCable].shortLabel : 'Cable'}: click the first device` : null} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onAddTextBox={addTextBoxAt} onDrawZone={drawZone} onDropDevice={(type, point) => { if (!flow) return; const position = flow.screenToFlowPosition(point); const id = topology.addDevice(type, position); setSelectedNodeId(id); setSelectedEdgeId(null) }} />
       <PropertiesPanel nodes={topology.nodes} selectedNode={selectedNode} selectedEdge={selectedEdge} collapsed={rightCollapsed} onToggle={() => setRightCollapsed(true)} onUpdateNode={topology.updateNode} onUpdateEdge={topology.updateEdge} onAddInterface={topology.addInterface} onUpdateInterface={topology.updateInterface} onRemoveInterface={topology.removeInterface} onDelete={deleteSelection} onCloseSelection={clearSelection} portSelection={settings.portSelection} onResizeStart={startRightResize} />
       <input ref={fileInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => void onImportFile(event.target.files?.[0])} />
       <ProjectManagerDialog open={projectManagerOpen} projects={topology.projects} activeProjectId={topology.activeProjectId} onClose={() => setProjectManagerOpen(false)} onCreate={createLocalProject} onSwitch={(id) => { if (topology.switchProject(id)) { resetWorkspaceInteraction(); setProjectManagerOpen(false); fitCurrentProject(); notify('success', 'Project opened.') } }} onRename={(id, name) => { topology.renameProject(id, name); notify('success', 'Project renamed.') }} onDuplicate={(id) => { const duplicateId = topology.duplicateProject(id); if (duplicateId) { resetWorkspaceInteraction(); setProjectManagerOpen(false); fitCurrentProject(); notify('success', 'Project duplicated.') } }} onDelete={(project) => { setProjectManagerOpen(false); setProjectToDelete(project) }} />
@@ -401,7 +408,7 @@ function App() {
       <PortSelectionDialog node={settings.portSelection ? portPromptNode : null} stage={portPrompt?.stage ?? 'first'} cableType={selectedCable} usedInterfaces={usedInterfaces} onCancel={() => setPortPrompt(null)} onConfirm={confirmCablePort} />
       <TextBoxToolDialog open={textDialogOpen} backgroundStyle={textOptions.backgroundStyle} backgroundColor={textOptions.backgroundColor} textColor={textOptions.textColor} onBackgroundStyleChange={(backgroundStyle: TextBoxBackgroundStyle) => setTextOptions((current) => ({ ...current, backgroundStyle }))} onBackgroundColorChange={(backgroundColor) => setTextOptions((current) => ({ ...current, backgroundColor }))} onTextColorChange={(textColor) => setTextOptions((current) => ({ ...current, textColor }))} onCancel={() => setTextDialogOpen(false)} onStart={startTextPlacement} />
       <ZoneToolDialog open={zoneDialogOpen} color={zoneOptions.color} lineStyle={zoneOptions.lineStyle} onColorChange={(color) => setZoneOptions((current) => ({ ...current, color }))} onLineStyleChange={(lineStyle: ZoneLineStyle) => setZoneOptions((current) => ({ ...current, lineStyle }))} onCancel={() => setZoneDialogOpen(false)} onStart={startZoneDrawing} />
-      <ExportOptionsDialog format={exportDialog} exporting={exporting} onCancel={() => setExportDialog(null)} onExport={(background) => { if (!exportDialog) return; const format = exportDialog; setExportDialog(null); void performExport(format, background) }} />
+      <ExportOptionsDialog format={exportDialog} exporting={exporting} onCancel={() => setExportDialog(null)} onFormatChange={setExportDialog} onExport={(background, pdfLayout, details) => { if (!exportDialog) return; const format = exportDialog; setExportDialog(null); void performExport(format, background, pdfLayout, details) }} />
       <Toasts toasts={toasts} onDismiss={dismissToast} />
       {exporting && <div className="export-overlay"><span className="spinner" /><strong>Preparing complete topology…</strong></div>}
     </div>

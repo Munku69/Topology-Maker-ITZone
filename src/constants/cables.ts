@@ -43,10 +43,12 @@ export const CABLE_PRESETS: Record<CableType, CablePreset> = {
   },
 }
 
-export function getCableStyle(type: CableType): CSSProperties {
+export const CABLE_COLORS = ['#38bdf8', '#22c55e', '#f59e0b', '#fb7185', '#a78bfa', '#ef4444', '#f8fafc', '#64748b'] as const
+
+export function getCableStyle(type: CableType, customColor?: string): CSSProperties {
   const preset = CABLE_PRESETS[type]
   return {
-    stroke: preset.color,
+    stroke: customColor || preset.color,
     strokeWidth: type === 'fiber' ? 3 : 2.25,
     strokeDasharray: preset.dash,
   }
