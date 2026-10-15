@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity, Cable, ChevronDown, CornerDownRight, Minus, PanelLeftClose, Radio, Shuffle, Spline, SquareDashed, Trash2, Type } from 'lucide-react'
+import { Activity, Cable, ChevronDown, CornerDownRight, Minus, PanelLeftClose, Radio, Search, Shuffle, Spline, SquareDashed, Trash2, Type, X } from 'lucide-react'
 import { DEVICE_GROUPS, DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_COLORS, CABLE_PRESETS } from '../constants/cables'
 import { LINK_PURPOSES, LINK_SPEEDS, type CablePathStyle, type CableType, type DeviceCategory, type DeviceType, type LinkPurpose, type LinkSpeed } from '../types/topology'
@@ -32,7 +32,17 @@ interface DeviceSidebarProps {
 
 export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, cableColor, cableSpeed, cablePurpose, cablePathStyle, onCableColorChange, onCableSpeedChange, onCablePurposeChange, onCablePathStyleChange, portSelection, onResizeStart, deleteMode, onToggleDeleteMode, textToolMode, onToggleTextTool, zoneToolMode, onToggleZoneTool }: DeviceSidebarProps) {
   const [openGroups, setOpenGroups] = useState<Set<DeviceCategory>>(() => new Set(['network']))
+  const [search, setSearch] = useState('')
   if (collapsed) return null
+  const query = search.trim().toLowerCase()
+  const visibleGroups = DEVICE_GROUPS.map((group) => ({
+    ...group,
+    types: group.types.filter((type) => {
+      if (!query) return true
+      const preset = DEVICE_PRESETS[type]
+      return [preset.label, preset.description, preset.defaultName, preset.type].some((value) => value.toLowerCase().includes(query))
+    }),
+  })).filter((group) => group.types.length)
   const toggleGroup = (category: DeviceCategory) => setOpenGroups((current) => {
     const next = new Set(current)
     if (next.has(category)) next.delete(category)
@@ -51,9 +61,10 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
         <button className="icon-button" onClick={onToggle} title="Collapse device library"><PanelLeftClose size={17} /></button>
       </div>
       <p className="panel-help">Drag a device onto the canvas to add it.</p>
+      <label className="device-search"><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search devices" aria-label="Search devices" />{search && <button onClick={() => setSearch('')} title="Clear device search"><X size={13} /></button>}</label>
       <div className="device-groups">
-        {DEVICE_GROUPS.map((group) => {
-          const open = openGroups.has(group.id)
+        {visibleGroups.map((group) => {
+          const open = Boolean(query) || openGroups.has(group.id)
           return <section className="device-group" key={group.id}>
             <button className="device-group__header" onClick={() => toggleGroup(group.id)} aria-expanded={open}>
               <span><strong>{group.label}</strong><small>{group.types.length} devices</small></span>
@@ -70,6 +81,7 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
             </div>}
           </section>
         })}
+        {!visibleGroups.length && <p className="device-search-empty">No devices match “{search.trim()}”.</p>}
       </div>
       <div className="cable-section">
         <div className="cable-section__heading"><div><p className="eyebrow">Connections</p><h3>Cables</h3></div>{selectedCable && <span className="tool-active">ACTIVE</span>}</div>

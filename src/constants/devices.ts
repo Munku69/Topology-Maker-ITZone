@@ -160,6 +160,23 @@ export function createDeviceData(type: DeviceType): DeviceData {
   }
 }
 
+export function nextDeviceName(type: DeviceType, nodes: TopologyNode[]): string {
+  const defaultName = DEVICE_PRESETS[type].defaultName
+  const used = new Set(nodes.map((node) => node.data.name.trim().toLowerCase()))
+  if (!used.has(defaultName.toLowerCase())) return defaultName
+  const numbered = defaultName.match(/^(.*?)(\d+)$/)
+  if (numbered) {
+    const prefix = numbered[1]!
+    const width = numbered[2]!.length
+    let index = Number(numbered[2]) + 1
+    while (used.has(`${prefix}${String(index).padStart(width, '0')}`.toLowerCase())) index += 1
+    return `${prefix}${String(index).padStart(width, '0')}`
+  }
+  let index = 2
+  while (used.has(`${defaultName}-${String(index).padStart(2, '0')}`.toLowerCase())) index += 1
+  return `${defaultName}-${String(index).padStart(2, '0')}`
+}
+
 export function createDemoTopology(): { nodes: TopologyNode[]; edges: TopologyEdge[] } {
   const makeNode = (id: string, type: DeviceType, x: number, y: number, patch: Partial<DeviceData>): TopologyNode => ({
     id,

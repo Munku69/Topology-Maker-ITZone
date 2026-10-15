@@ -8,10 +8,15 @@ import { PropertiesPanel } from './components/PropertiesPanel'
 import { ProjectManagerDialog } from './components/ProjectManagerDialog'
 import { Toasts, type ToastKind, type ToastMessage } from './components/Toast'
 import { Toolbar } from './components/Toolbar'
-import { TopologyCanvas } from './components/TopologyCanvas'
+import { TopologyCanvas, type CanvasContextAction } from './components/TopologyCanvas'
+import { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog'
+import { StatusBar } from './components/StatusBar'
 import { TextBoxToolDialog } from './components/TextBoxToolDialog'
 import { ZoneToolDialog } from './components/ZoneToolDialog'
+import { TopologyTemplatesDialog } from './components/TopologyTemplatesDialog'
+import { ValidationDialog } from './components/ValidationDialog'
 import { createDemoTopology } from './constants/devices'
+import { createTopologyTemplate, TOPOLOGY_TEMPLATES, type TopologyTemplateId } from './constants/templates'
 import { CABLE_PRESETS } from './constants/cables'
 import { useTopology } from './hooks/useTopology'
 import { useTheme } from './hooks/useTheme'
@@ -20,8 +25,9 @@ import { usePanelSizes } from './hooks/usePanelSizes'
 import { DEVICE_TYPES, type CablePathStyle, type CableType, type DeviceType, type LinkPurpose, type LinkSpeed, type ProjectSummary, type TextBoxBackgroundStyle, type TextBoxToolOptions, type TopologyEdge, type TopologyNode, type TopologyProject, type ZoneLineStyle, type ZoneToolOptions } from './types/topology'
 import type { ExportBackground, PdfExportDetails, PdfLayout } from './types/export'
 import { downloadJson, validateProject } from './utils/project'
+import { calculateAutoLayout, validateTopology, type TopologyIssue } from './utils/automation'
 
-type PendingAction = { type: 'new' } | { type: 'demo' } | { type: 'import'; project: TopologyProject }
+type PendingAction = { type: 'new' } | { type: 'demo' } | { type: 'import'; project: TopologyProject } | { type: 'template'; templateId: TopologyTemplateId }
 type CableEndpoint = { nodeId: string; interfaceName: string; handleId: string }
 type PortPrompt = { nodeId: string; stage: 'first' | 'second'; handleId: string }
 const NETWORK_DEVICE_TYPES = DEVICE_TYPES.filter((type) => type !== 'text-box' && type !== 'zone')
@@ -56,12 +62,20 @@ function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [exporting, setExporting] = useState(false)
   const [exportDialog, setExportDialog] = useState<ExportFormat | null>(null)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [validationOpen, setValidationOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [clipboardAvailable, setClipboardAvailable] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const clipboardRef = useRef<{ nodes: TopologyNode[]; edges: TopologyEdge[] } | null>(null)
+  const pasteGenerationRef = useRef(1)
   const selectedNode = topology.nodes.find((node) => node.id === selectedNodeId) ?? null
   const selectedEdge = topology.edges.find((edge) => edge.id === selectedEdgeId) ?? null
   const portPromptNode = topology.nodes.find((node) => node.id === portPrompt?.nodeId) ?? null
   const cableStartNode = topology.nodes.find((node) => node.id === cableEndpoint?.nodeId) ?? null
+  const topologyIssues = useMemo(() => validateTopology(topology.nodes, topology.edges), [topology.edges, topology.nodes])
   const usedInterfaces = useMemo(() => {
     if (!portPrompt) return new Set<string>()
     const used = new Set<string>()
@@ -97,6 +111,16 @@ function App() {
       topology.replaceProject(action.project)
       window.setTimeout(() => flow?.fitView({ padding: 0.2, duration: 450 }), 80)
       notify('success', `Imported “${action.project.projectName}”.`)
+    }
+    if (action.type === 'template') {
+      const template = TOPOLOGY_TEMPLATES.find((item) => item.id === action.templateId)
+      if (template) {
+        const generated = createTopologyTemplate(action.templateId)
+        const now = new Date().toISOString()
+        topology.replaceProject({ version: 1, projectName: template.name, createdAt: now, updatedAt: now, ...generated })
+        window.setTimeout(() => flow?.fitView({ padding: 0.18, duration: 500 }), 80)
+        notify('success', `${template.name} template loaded.`)
+      }
     }
     setSelectedNodeId(null); setSelectedEdgeId(null); setPendingAction(null); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); setDeleteMode(false); setTextToolMode(false); setTextDialogOpen(false); setZoneToolMode(false); setZoneDialogOpen(false)
   }, [flow, notify, topology])
@@ -140,6 +164,100 @@ function App() {
     setSelectedNodeId(null); setSelectedEdgeId(null); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); setDeleteMode(false); setTextToolMode(false); setTextDialogOpen(false); setZoneToolMode(false); setZoneDialogOpen(false)
   }
   const fitCurrentProject = () => window.setTimeout(() => flow?.fitView({ padding: 0.2, duration: 350 }), 80)
+  const arrangeTopology = () => {
+    const selectedDevices = topology.nodes.filter((node) => node.selected && node.data.deviceType !== 'zone' && node.data.deviceType !== 'text-box').length
+    const positions = calculateAutoLayout(topology.nodes, topology.edges)
+    if (!topology.applyNodePositions(positions)) { notify('info', 'Add at least two devices before arranging the topology.'); return }
+    window.setTimeout(() => flow?.fitView({ padding: 0.2, duration: 450 }), 60)
+    notify('success', selectedDevices >= 2 ? `Arranged ${selectedDevices} selected devices.` : 'Topology arranged automatically.')
+  }
+  const zoneSelectedDevices = (requestedNodes?: TopologyNode[]) => {
+    const selected = (requestedNodes ?? topology.nodes.filter((node) => node.selected)).filter((node) => node.data.deviceType !== 'zone' && node.data.deviceType !== 'text-box')
+    if (!selected.length) { notify('info', 'Select one or more devices before creating an automatic zone.'); return }
+    const padding = 45
+    const minX = Math.min(...selected.map((node) => node.position.x))
+    const minY = Math.min(...selected.map((node) => node.position.y))
+    const maxX = Math.max(...selected.map((node) => node.position.x + (node.measured?.width ?? node.width ?? 112)))
+    const maxY = Math.max(...selected.map((node) => node.position.y + (node.measured?.height ?? node.height ?? 112) + 34))
+    const name = selected.length === 1 ? `${selected[0]!.data.name} Zone` : 'Network Zone'
+    const id = topology.addZone({ x: minX - padding, y: minY - padding }, { width: maxX - minX + padding * 2, height: maxY - minY + padding * 2 }, zoneOptions.color, zoneOptions.lineStyle, name)
+    if (!id) { notify('error', 'Unable to create the zone because it would overlap an existing zone.'); return }
+    setSelectedNodeId(id); setSelectedEdgeId(null)
+    notify('success', `Zone created around ${selected.length} device${selected.length === 1 ? '' : 's'}.`)
+  }
+
+  const copyNodes = useCallback((target?: TopologyNode, announce = true) => {
+    const selected = topology.nodes.filter((node) => node.selected && node.data.deviceType !== 'zone')
+    const currentTarget = target ? topology.nodes.find((node) => node.id === target.id) : undefined
+    const nodesToCopy = (currentTarget && !currentTarget.selected ? [currentTarget] : selected).filter((node) => node.data.deviceType !== 'zone')
+    if (!nodesToCopy.length) return false
+    const selectedIds = new Set(nodesToCopy.map((node) => node.id))
+    const selectedEdges = topology.edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target))
+    clipboardRef.current = { nodes: structuredClone(nodesToCopy), edges: structuredClone(selectedEdges) }
+    pasteGenerationRef.current = 1
+    setClipboardAvailable(true)
+    if (announce) notify('info', `Copied ${nodesToCopy.length} item${nodesToCopy.length === 1 ? '' : 's'}.`)
+    return true
+  }, [notify, topology.edges, topology.nodes])
+
+  const pasteCopiedNodes = useCallback(() => {
+    if (!clipboardRef.current) return []
+    const distance = 32 * pasteGenerationRef.current++
+    const ids = topology.pasteElements(clipboardRef.current.nodes, clipboardRef.current.edges, { x: distance, y: distance })
+    setSelectedNodeId(ids[0] ?? null)
+    setSelectedEdgeId(null)
+    notify('success', `Pasted ${ids.length} item${ids.length === 1 ? '' : 's'}.`)
+    return ids
+  }, [notify, topology.pasteElements])
+
+  const performUndo = useCallback(() => {
+    if (!topology.undo()) return
+    setSelectedNodeId(null); setSelectedEdgeId(null); setCableEndpoint(null); setPortPrompt(null)
+  }, [topology.undo])
+
+  const performRedo = useCallback(() => {
+    if (!topology.redo()) return
+    setSelectedNodeId(null); setSelectedEdgeId(null); setCableEndpoint(null); setPortPrompt(null)
+  }, [topology.redo])
+
+  const handleCanvasContextAction = (action: CanvasContextAction, target?: TopologyNode | TopologyEdge) => {
+    if (action === 'fit') { fitCurrentProject(); return }
+    if (action === 'arrange') { arrangeTopology(); return }
+    if (action === 'paste') { pasteCopiedNodes(); return }
+    if (action === 'copy' && target && 'position' in target) { copyNodes(target); return }
+    if (action === 'duplicate' && target && 'position' in target) {
+      if (copyNodes(target, false)) pasteCopiedNodes()
+      return
+    }
+    if (action === 'zone' && target && 'position' in target) {
+      const group = target.selected ? topology.nodes.filter((node) => node.selected) : [target]
+      zoneSelectedDevices(group)
+      return
+    }
+    if (action === 'delete' && target) {
+      if ('position' in target) {
+        topology.deleteNode(target.id)
+        notify('info', target.data.deviceType === 'zone' ? 'Zone deleted.' : target.data.deviceType === 'text-box' ? 'Text box deleted.' : `${target.data.name || 'Device'} and its connected cables deleted.`)
+      } else {
+        topology.deleteEdge(target.id)
+        notify('info', 'Cable deleted.')
+      }
+      setSelectedNodeId(null); setSelectedEdgeId(null)
+    }
+  }
+  const locateIssue = (issue: TopologyIssue) => {
+    setValidationOpen(false)
+    const nodeIds = new Set(issue.nodeId ? [issue.nodeId] : [])
+    if (!nodeIds.size && issue.edgeId) {
+      const edge = topology.edges.find((item) => item.id === issue.edgeId)
+      if (edge) { nodeIds.add(edge.source); nodeIds.add(edge.target) }
+    }
+    topology.setNodes((current) => current.map((node) => ({ ...node, selected: node.id === issue.nodeId })))
+    topology.setEdges((current) => current.map((edge) => ({ ...edge, selected: edge.id === issue.edgeId })))
+    setSelectedNodeId(issue.nodeId ?? null); setSelectedEdgeId(issue.edgeId ?? null)
+    const nodesToFit = topology.nodes.filter((node) => nodeIds.has(node.id))
+    if (nodesToFit.length) window.setTimeout(() => flow?.fitView({ nodes: nodesToFit, padding: 0.8, duration: 350, maxZoom: 1.25 }), 40)
+  }
   const createLocalProject = (name = 'Untitled Network') => {
     topology.createProject(name)
     resetWorkspaceInteraction()
@@ -283,6 +401,7 @@ function App() {
     const position = { x: Math.min(first.x, second.x), y: Math.min(first.y, second.y) }
     const size = { width: Math.max(160, Math.abs(second.x - first.x)), height: Math.max(110, Math.abs(second.y - first.y)) }
     const id = topology.addZone(position, size, zoneOptions.color, zoneOptions.lineStyle)
+    if (!id) { notify('error', 'Zones cannot overlap. Draw this zone in a separate area.'); return }
     setSelectedNodeId(id); setSelectedEdgeId(null); setZoneToolMode(false)
     notify('success', 'Zone added. Rename or restyle it in Properties.')
   }
@@ -359,16 +478,57 @@ function App() {
       const isRedo = key === 'y' || (key === 'z' && event.shiftKey)
       if (!isUndo && !isRedo) return
       event.preventDefault()
-      const changed = isUndo ? topology.undo() : topology.redo()
-      if (!changed) return
-      setSelectedNodeId(null)
-      setSelectedEdgeId(null)
-      setCableEndpoint(null)
-      setPortPrompt(null)
+      if (isUndo) performUndo()
+      else performRedo()
     }
     window.addEventListener('keydown', handleHistoryShortcut)
     return () => window.removeEventListener('keydown', handleHistoryShortcut)
-  }, [topology.redo, topology.undo])
+  }, [performRedo, performUndo])
+
+  useEffect(() => {
+    const handleClipboardShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const key = event.key.toLowerCase()
+      if (key === 'c') {
+        if (!copyNodes()) return
+        event.preventDefault()
+      }
+      if (key === 'v' && clipboardRef.current) {
+        event.preventDefault()
+        pasteCopiedNodes()
+      }
+    }
+    window.addEventListener('keydown', handleClipboardShortcut)
+    return () => window.removeEventListener('keydown', handleClipboardShortcut)
+  }, [copyNodes, pasteCopiedNodes])
+
+  useEffect(() => {
+    const handleWorkspaceShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const modifier = event.ctrlKey || event.metaKey
+      if (modifier && event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        topology.saveNow()
+        notify('success', 'Project saved locally.')
+        return
+      }
+      if (!modifier && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        fitCurrentProject()
+        return
+      }
+      if (!modifier && event.key === '?') {
+        event.preventDefault()
+        setShortcutsOpen(true)
+      }
+      if (event.key === 'Escape' && shortcutsOpen) setShortcutsOpen(false)
+    }
+    window.addEventListener('keydown', handleWorkspaceShortcut)
+    return () => window.removeEventListener('keydown', handleWorkspaceShortcut)
+  }, [fitCurrentProject, notify, shortcutsOpen, topology.saveNow])
 
   useEffect(() => {
     const context = document.modelContext
@@ -397,18 +557,22 @@ function App() {
 
   return (
     <div className={`app-shell ${leftCollapsed ? 'left-collapsed' : ''} ${rightCollapsed ? 'right-collapsed' : ''}`} style={{ '--library-width': `${panelSizes.left}px`, '--inspector-width': `${panelSizes.right}px` } as React.CSSProperties}>
-      <Toolbar projectName={topology.projectName} saveState={topology.saveState} leftCollapsed={leftCollapsed} rightCollapsed={rightCollapsed} onProjectNameChange={topology.setProjectName} onManageProjects={() => setProjectManagerOpen(true)} onNew={() => requestAction({ type: 'new' })} onSave={() => { topology.saveNow(); notify('success', 'Project saved locally.') }} onImport={() => fileInputRef.current?.click()} onExportJson={() => { downloadJson(topology.getProject()); notify('success', 'Editable project downloaded.') }} onExportPdf={() => setExportDialog('pdf')} onExportPng={() => setExportDialog('png')} onLoadDemo={() => requestAction({ type: 'demo' })} onToggleLeft={() => setLeftCollapsed(false)} onToggleRight={() => setRightCollapsed(false)} exporting={exporting} theme={theme} onToggleTheme={toggleTheme} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onShowCablesChange={(value) => { setFeature('showCables', value); if (!value) clearSelection(); notify('info', value ? 'Cables are visible.' : 'Cables are hidden.') }} onPortSelectionChange={(value) => { setFeature('portSelection', value); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); notify('info', value ? 'Port selection enabled. Cable types are available.' : 'Port selection disabled. Connections use the simple cable tool.') }} onShowDeviceLabelsChange={(value) => { setFeature('showDeviceLabels', value); notify('info', value ? 'Device labels are visible.' : 'Device labels are hidden.') }} />
+      <Toolbar projectName={topology.projectName} saveState={topology.saveState} leftCollapsed={leftCollapsed} rightCollapsed={rightCollapsed} onProjectNameChange={topology.setProjectName} onManageProjects={() => setProjectManagerOpen(true)} onNew={() => requestAction({ type: 'new' })} onSave={() => { topology.saveNow(); notify('success', 'Project saved locally.') }} onImport={() => fileInputRef.current?.click()} onExportJson={() => { downloadJson(topology.getProject()); notify('success', 'Editable project downloaded.') }} onExportPdf={() => setExportDialog('pdf')} onExportPng={() => setExportDialog('png')} onLoadDemo={() => requestAction({ type: 'demo' })} onArrange={arrangeTopology} onFit={fitCurrentProject} canUndo={topology.canUndo} canRedo={topology.canRedo} onUndo={performUndo} onRedo={performRedo} onOpenShortcuts={() => setShortcutsOpen(true)} onOpenTemplates={() => setTemplatesOpen(true)} onOpenValidation={() => setValidationOpen(true)} onZoneSelection={zoneSelectedDevices} issueCount={topologyIssues.length} onToggleLeft={() => setLeftCollapsed(false)} onToggleRight={() => setRightCollapsed(false)} exporting={exporting} theme={theme} onToggleTheme={toggleTheme} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onShowCablesChange={(value) => { setFeature('showCables', value); if (!value) clearSelection(); notify('info', value ? 'Cables are visible.' : 'Cables are hidden.') }} onPortSelectionChange={(value) => { setFeature('portSelection', value); setSelectedCable(null); setCableEndpoint(null); setPortPrompt(null); notify('info', value ? 'Port selection enabled. Cable types are available.' : 'Port selection disabled. Connections use the simple cable tool.') }} onShowDeviceLabelsChange={(value) => { setFeature('showDeviceLabels', value); notify('info', value ? 'Device labels are visible.' : 'Device labels are hidden.') }} />
       <DeviceSidebar collapsed={leftCollapsed} onToggle={() => setLeftCollapsed(true)} selectedCable={selectedCable} cableStartLabel={cableStartNode ? `${cableStartNode.data.name} ${cableEndpoint?.interfaceName ?? ''}` : null} onSelectCable={selectCableTool} cableColor={cableColor} cableSpeed={cableSpeed} cablePurpose={cablePurpose} cablePathStyle={cablePathStyle} onCableColorChange={setCableColor} onCableSpeedChange={setCableSpeed} onCablePurposeChange={setCablePurpose} onCablePathStyleChange={setCablePathStyle} portSelection={settings.portSelection} onResizeStart={startLeftResize} deleteMode={deleteMode} onToggleDeleteMode={toggleDeleteMode} textToolMode={textToolMode} onToggleTextTool={toggleTextTool} zoneToolMode={zoneToolMode} onToggleZoneTool={toggleZoneTool} />
-      <TopologyCanvas ref={canvasRef} nodes={topology.nodes} edges={topology.edges} onNodesChange={topology.onNodesChange} onEdgesChange={topology.onEdgesChange} onInit={setFlow} onSelectionChange={onSelectionChange} onNodeClick={handleCableNodeClick} onEdgeClick={handleDeleteEdge} onReconnect={topology.reconnectConnection} cableMode={Boolean(selectedCable)} deleteMode={deleteMode} textToolMode={textToolMode} zoneToolMode={zoneToolMode} zoneOptions={zoneOptions} cableSourceNodeId={cableEndpoint?.nodeId ?? null} cableStatus={selectedCable ? cableEndpoint ? `${settings.portSelection ? CABLE_PRESETS[selectedCable].shortLabel : 'Cable'}: click the second device` : `${settings.portSelection ? CABLE_PRESETS[selectedCable].shortLabel : 'Cable'}: click the first device` : null} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} onAddTextBox={addTextBoxAt} onDrawZone={drawZone} onDropDevice={(type, point) => { if (!flow) return; const position = flow.screenToFlowPosition(point); const id = topology.addDevice(type, position); setSelectedNodeId(id); setSelectedEdgeId(null) }} />
+      <TopologyCanvas ref={canvasRef} nodes={topology.nodes} edges={topology.edges} onNodesChange={topology.onNodesChange} onEdgesChange={topology.onEdgesChange} onInit={setFlow} onZoomChange={setZoom} onSelectionChange={onSelectionChange} onNodeClick={handleCableNodeClick} onEdgeClick={handleDeleteEdge} onReconnect={topology.reconnectConnection} cableMode={Boolean(selectedCable)} deleteMode={deleteMode} textToolMode={textToolMode} zoneToolMode={zoneToolMode} zoneOptions={zoneOptions} cableSourceNodeId={cableEndpoint?.nodeId ?? null} cableStatus={selectedCable ? cableEndpoint ? `${settings.portSelection ? CABLE_PRESETS[selectedCable].shortLabel : 'Cable'}: click the second device` : `${settings.portSelection ? CABLE_PRESETS[selectedCable].shortLabel : 'Cable'}: click the first device` : null} showCables={settings.showCables} portSelection={settings.portSelection} showDeviceLabels={settings.showDeviceLabels} hasClipboard={clipboardAvailable} onContextAction={handleCanvasContextAction} onAddTextBox={addTextBoxAt} onDrawZone={drawZone} onDropDevice={(type, point) => { if (!flow) return; const position = flow.screenToFlowPosition(point); const id = topology.addDevice(type, position); setSelectedNodeId(id); setSelectedEdgeId(null) }} />
       <PropertiesPanel nodes={topology.nodes} selectedNode={selectedNode} selectedEdge={selectedEdge} collapsed={rightCollapsed} onToggle={() => setRightCollapsed(true)} onUpdateNode={topology.updateNode} onUpdateEdge={topology.updateEdge} onAddInterface={topology.addInterface} onUpdateInterface={topology.updateInterface} onRemoveInterface={topology.removeInterface} onDelete={deleteSelection} onCloseSelection={clearSelection} portSelection={settings.portSelection} onResizeStart={startRightResize} />
       <input ref={fileInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => void onImportFile(event.target.files?.[0])} />
       <ProjectManagerDialog open={projectManagerOpen} projects={topology.projects} activeProjectId={topology.activeProjectId} onClose={() => setProjectManagerOpen(false)} onCreate={createLocalProject} onSwitch={(id) => { if (topology.switchProject(id)) { resetWorkspaceInteraction(); setProjectManagerOpen(false); fitCurrentProject(); notify('success', 'Project opened.') } }} onRename={(id, name) => { topology.renameProject(id, name); notify('success', 'Project renamed.') }} onDuplicate={(id) => { const duplicateId = topology.duplicateProject(id); if (duplicateId) { resetWorkspaceInteraction(); setProjectManagerOpen(false); fitCurrentProject(); notify('success', 'Project duplicated.') } }} onDelete={(project) => { setProjectManagerOpen(false); setProjectToDelete(project) }} />
-      <ConfirmDialog open={Boolean(pendingAction)} title="Are you sure?" message={pendingAction?.type === 'new' ? 'Your current project will remain saved locally and a new blank project will be opened.' : pendingAction?.type === 'demo' ? 'Loading the example will replace every device and cable on the current project.' : 'Importing this file will replace every device and cable on the current project.'} confirmLabel={pendingAction?.type === 'new' ? 'Create project' : pendingAction?.type === 'demo' ? 'Load example' : 'Replace and import'} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && runPending(pendingAction)} />
+      <TopologyTemplatesDialog open={templatesOpen} onClose={() => setTemplatesOpen(false)} onChoose={(template) => { setTemplatesOpen(false); requestAction({ type: 'template', templateId: template.id }) }} />
+      <ValidationDialog open={validationOpen} issues={topologyIssues} onClose={() => setValidationOpen(false)} onLocate={locateIssue} />
+      <KeyboardShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <ConfirmDialog open={Boolean(pendingAction)} title="Are you sure?" message={pendingAction?.type === 'new' ? 'Your current project will remain saved locally and a new blank project will be opened.' : pendingAction?.type === 'demo' ? 'Loading the example will replace every device and cable on the current project.' : pendingAction?.type === 'template' ? 'Loading this template will replace every device and cable on the current project.' : 'Importing this file will replace every device and cable on the current project.'} confirmLabel={pendingAction?.type === 'new' ? 'Create project' : pendingAction?.type === 'demo' ? 'Load example' : pendingAction?.type === 'template' ? 'Load template' : 'Replace and import'} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && runPending(pendingAction)} />
       <ConfirmDialog open={Boolean(projectToDelete)} title="Delete this project?" message={`“${projectToDelete?.projectName ?? ''}” will be removed from this browser. Export it as JSON first if you may need it later.`} confirmLabel="Delete project" onCancel={() => { setProjectToDelete(null); setProjectManagerOpen(true) }} onConfirm={() => { if (!projectToDelete) return; const name = projectToDelete.projectName; topology.deleteProject(projectToDelete.id); setProjectToDelete(null); resetWorkspaceInteraction(); fitCurrentProject(); notify('info', `Deleted “${name}”.`) }} />
       <PortSelectionDialog node={settings.portSelection ? portPromptNode : null} stage={portPrompt?.stage ?? 'first'} cableType={selectedCable} usedInterfaces={usedInterfaces} onCancel={() => setPortPrompt(null)} onConfirm={confirmCablePort} />
       <TextBoxToolDialog open={textDialogOpen} backgroundStyle={textOptions.backgroundStyle} backgroundColor={textOptions.backgroundColor} textColor={textOptions.textColor} onBackgroundStyleChange={(backgroundStyle: TextBoxBackgroundStyle) => setTextOptions((current) => ({ ...current, backgroundStyle }))} onBackgroundColorChange={(backgroundColor) => setTextOptions((current) => ({ ...current, backgroundColor }))} onTextColorChange={(textColor) => setTextOptions((current) => ({ ...current, textColor }))} onCancel={() => setTextDialogOpen(false)} onStart={startTextPlacement} />
       <ZoneToolDialog open={zoneDialogOpen} color={zoneOptions.color} lineStyle={zoneOptions.lineStyle} onColorChange={(color) => setZoneOptions((current) => ({ ...current, color }))} onLineStyleChange={(lineStyle: ZoneLineStyle) => setZoneOptions((current) => ({ ...current, lineStyle }))} onCancel={() => setZoneDialogOpen(false)} onStart={startZoneDrawing} />
       <ExportOptionsDialog format={exportDialog} exporting={exporting} onCancel={() => setExportDialog(null)} onFormatChange={setExportDialog} onExport={(background, pdfLayout, details) => { if (!exportDialog) return; const format = exportDialog; setExportDialog(null); void performExport(format, background, pdfLayout, details) }} />
+      <StatusBar deviceCount={topology.nodes.filter((node) => node.data.deviceType !== 'text-box' && node.data.deviceType !== 'zone').length} linkCount={topology.edges.length} selectedCount={topology.nodes.filter((node) => node.selected).length + topology.edges.filter((edge) => edge.selected).length} zoom={zoom} activeTool={deleteMode ? 'Delete tool' : textToolMode ? 'Text tool' : zoneToolMode ? 'Zone tool' : selectedCable ? `${settings.portSelection ? CABLE_PRESETS[selectedCable].shortLabel : 'Cable'} tool` : 'Select'} onZoomOut={() => flow?.zoomOut({ duration: 140 })} onZoomIn={() => flow?.zoomIn({ duration: 140 })} onZoomChange={(percentage) => flow?.zoomTo(percentage / 100, { duration: 180 })} />
       <Toasts toasts={toasts} onDismiss={dismissToast} />
       {exporting && <div className="export-overlay"><span className="spinner" /><strong>Preparing complete topology…</strong></div>}
     </div>

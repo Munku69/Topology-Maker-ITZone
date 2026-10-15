@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { addEdge, applyEdgeChanges, applyNodeChanges, type Connection, type EdgeChange, type NodeChange } from '@xyflow/react'
-import { createDeviceData, newId } from '../constants/devices'
+import { createDeviceData, newId, nextDeviceName } from '../constants/devices'
 import { getCableStyle } from '../constants/cables'
 import { createBlankProject, loadProjectLibrary, newProjectId, saveProjectLibrary, type ProjectLibrary } from '../utils/project'
 import type { ConnectionData, DeviceData, DeviceInterface, DeviceType, ProjectSummary, SaveState, StoredTopologyProject, TopologyEdge, TopologyNode, TopologyProject, ZoneLineStyle } from '../types/topology'
@@ -14,6 +14,27 @@ interface TopologySnapshot {
 
 const HISTORY_LIMIT = 100
 const EDIT_GROUP_WINDOW = 800
+const ZONE_GAP = 10
+
+function zoneSize(node: TopologyNode): { width: number; height: number } {
+  return {
+    width: node.width ?? node.measured?.width ?? 160,
+    height: node.height ?? node.measured?.height ?? 110,
+  }
+}
+
+function zonesOverlap(first: TopologyNode, second: TopologyNode): boolean {
+  const firstSize = zoneSize(first)
+  const secondSize = zoneSize(second)
+  return first.position.x < second.position.x + secondSize.width + ZONE_GAP
+    && first.position.x + firstSize.width + ZONE_GAP > second.position.x
+    && first.position.y < second.position.y + secondSize.height + ZONE_GAP
+    && first.position.y + firstSize.height + ZONE_GAP > second.position.y
+}
+
+function overlapsAnotherZone(zone: TopologyNode, nodes: TopologyNode[]): boolean {
+  return nodes.some((node) => node.id !== zone.id && node.data.deviceType === 'zone' && zonesOverlap(zone, node))
+}
 
 export function useTopology() {
   const initialLibrary = useRef(loadProjectLibrary()).current
@@ -175,7 +196,23 @@ export function useTopology() {
     }
     const removedIds = new Set(changes.filter((change) => change.type === 'remove').map((change) => change.id))
     if (removedIds.size) lastNodeRemovalTimeRef.current = Date.now()
-    setNodes((current) => applyNodeChanges(changes, current))
+    setNodes((current) => {
+      const candidate = applyNodeChanges(changes, current)
+      const spatialZoneIds = new Set(changes.flatMap((change) => {
+        if (change.type !== 'position' && change.type !== 'dimensions') return []
+        const node = candidate.find((item) => item.id === change.id)
+        return node?.data.deviceType === 'zone' ? [change.id] : []
+      }))
+      const blockedZoneIds = new Set([...spatialZoneIds].filter((id) => {
+        const zone = candidate.find((node) => node.id === id)
+        return zone ? overlapsAnotherZone(zone, candidate) : false
+      }))
+      if (!blockedZoneIds.size) return candidate
+      return applyNodeChanges(changes.filter((change) => {
+        if (change.type !== 'position' && change.type !== 'dimensions') return true
+        return !blockedZoneIds.has(change.id)
+      }), current)
+    })
     if (removedIds.size) setEdges((current) => current.filter((edge) => !removedIds.has(edge.source) && !removedIds.has(edge.target)))
     if (hasFinishedInteraction) nodeInteractionActiveRef.current = false
   }, [recordHistory])
@@ -195,26 +232,73 @@ export function useTopology() {
   const addDevice = useCallback((type: DeviceType, position: { x: number; y: number }, patch: Partial<DeviceData> = {}) => {
     recordHistory()
     const id = newId('device')
-    setNodes((current) => [...current, { id, type, position, data: { ...createDeviceData(type), ...patch, deviceType: type }, selected: true }])
+    const suggestedName = nextDeviceName(type, nodesRef.current)
+    const baseData = createDeviceData(type)
+    setNodes((current) => [...current, { id, type, position, data: { ...baseData, name: suggestedName, hostname: suggestedName, ...patch, deviceType: type }, selected: true }])
     setNodes((current) => current.map((node) => node.id === id ? node : { ...node, selected: false }))
     setEdges((current) => current.map((edge) => ({ ...edge, selected: false })))
     return id
   }, [recordHistory])
 
-  const addZone = useCallback((position: { x: number; y: number }, size: { width: number; height: number }, color: string, lineStyle: ZoneLineStyle) => {
-    recordHistory()
+  const addZone = useCallback((position: { x: number; y: number }, size: { width: number; height: number }, color: string, lineStyle: ZoneLineStyle, name = 'Network Zone') => {
     const id = newId('zone')
     const data: DeviceData = {
       ...createDeviceData('zone'),
-      name: 'Network Zone',
-      hostname: 'Network Zone',
+      name,
+      hostname: name,
       zoneColor: color,
       zoneLineStyle: lineStyle,
     }
     const zone: TopologyNode = { id, type: 'zone', position, width: size.width, height: size.height, data, selected: true }
+    if (overlapsAnotherZone(zone, nodesRef.current)) return null
+    recordHistory()
     setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), zone])
     setEdges((current) => current.map((edge) => ({ ...edge, selected: false })))
     return id
+  }, [recordHistory])
+
+  const applyNodePositions = useCallback((positions: Map<string, { x: number; y: number }>) => {
+    if (!positions.size) return false
+    recordHistory()
+    setNodes((current) => current.map((node) => positions.has(node.id) ? { ...node, position: positions.get(node.id)! } : node))
+    return true
+  }, [recordHistory])
+
+  const pasteElements = useCallback((sourceNodes: TopologyNode[], sourceEdges: TopologyEdge[], offset: { x: number; y: number }) => {
+    if (!sourceNodes.length) return [] as string[]
+    recordHistory()
+    const idMap = new Map<string, string>()
+    const usedNames = new Set(nodesRef.current.map((node) => node.data.name.trim().toLowerCase()))
+    const pastedNodes = structuredClone(sourceNodes).map((node) => {
+      const id = newId(node.data.deviceType === 'text-box' ? 'text' : 'device')
+      idMap.set(node.id, id)
+      const baseName = `${node.data.name || 'Device'} Copy`
+      let name = baseName
+      let copyNumber = 2
+      while (usedNames.has(name.toLowerCase())) name = `${baseName} ${copyNumber++}`
+      usedNames.add(name.toLowerCase())
+      return {
+        ...node,
+        id,
+        position: { x: node.position.x + offset.x, y: node.position.y + offset.y },
+        selected: true,
+        data: {
+          ...node.data,
+          name,
+          hostname: node.data.deviceType === 'text-box' ? node.data.hostname : name,
+          interfaces: node.data.interfaces.map((item) => ({ ...item, id: newId('if') })),
+        },
+      }
+    })
+    const pastedEdges = structuredClone(sourceEdges).flatMap((edge) => {
+      const source = idMap.get(edge.source)
+      const target = idMap.get(edge.target)
+      if (!source || !target) return []
+      return [{ ...edge, id: newId('edge'), source, target, selected: false }]
+    })
+    setNodes((current) => [...current.map((node) => ({ ...node, selected: false })), ...pastedNodes])
+    setEdges((current) => [...current.map((edge) => ({ ...edge, selected: false })), ...pastedEdges])
+    return pastedNodes.map((node) => node.id)
   }, [recordHistory])
 
   const updateNode = useCallback((id: string, patch: Partial<DeviceData>, type?: DeviceType) => {
@@ -394,5 +478,5 @@ export function useTopology() {
 
   const saveNow = useCallback(() => { persistCurrent(); setSaveState('saved') }, [persistCurrent])
 
-  return { nodes, edges, projectName, activeProjectId, projects: projectSummaries, saveState, canUndo, canRedo, undo, redo, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, reconnectConnection, addDevice, addZone, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, deleteNode, deleteEdge, clearSelection, replaceProject, switchProject, createProject, renameProject, duplicateProject, deleteProject, saveNow, getProject }
+  return { nodes, edges, projectName, activeProjectId, projects: projectSummaries, saveState, canUndo, canRedo, undo, redo, setProjectName, setNodes, setEdges, onNodesChange, onEdgesChange, addConnection, reconnectConnection, addDevice, addZone, applyNodePositions, pasteElements, updateNode, updateEdge, addInterface, updateInterface, removeInterface, deleteSelection, deleteNode, deleteEdge, clearSelection, replaceProject, switchProject, createProject, renameProject, duplicateProject, deleteProject, saveNow, getProject }
 }

@@ -1,5 +1,5 @@
-import { forwardRef, useMemo, useState } from 'react'
-import { SquareDashed, Trash2, Type } from 'lucide-react'
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import { Cable, ChevronDown, ClipboardPaste, Copy, LayoutGrid, Maximize2, SquareDashed, Trash2, Type } from 'lucide-react'
 import {
   Background, BackgroundVariant, ConnectionMode, Controls, MiniMap, ReactFlow,
   type Connection, type EdgeChange, type EdgeTypes, type NodeChange, type NodeTypes,
@@ -24,6 +24,7 @@ interface TopologyCanvasProps {
   onEdgesChange: (changes: EdgeChange<TopologyEdge>[]) => void
   onDropDevice: (type: DeviceType, point: { x: number; y: number }) => void
   onInit: (instance: ReactFlowInstance<TopologyNode, TopologyEdge>) => void
+  onZoomChange: (zoom: number) => void
   onSelectionChange: (node: TopologyNode | null, edge: TopologyEdge | null) => void
   onNodeClick: (node: TopologyNode, handleId: string) => void
   onEdgeClick: (edge: TopologyEdge) => void
@@ -40,12 +41,51 @@ interface TopologyCanvasProps {
   showDeviceLabels: boolean
   onAddTextBox: (point: { x: number; y: number }) => void
   onDrawZone: (start: { x: number; y: number }, end: { x: number; y: number }) => void
+  onContextAction: (action: CanvasContextAction, target?: TopologyNode | TopologyEdge) => void
+  hasClipboard: boolean
 }
+
+export type CanvasContextAction = 'copy' | 'duplicate' | 'delete' | 'zone' | 'paste' | 'arrange' | 'fit'
+type CanvasContextMenu = { kind: 'node'; x: number; y: number; target: TopologyNode } | { kind: 'edge'; x: number; y: number; target: TopologyEdge } | { kind: 'pane'; x: number; y: number }
+type CanvasContextRequest = { kind: 'node'; target: TopologyNode } | { kind: 'edge'; target: TopologyEdge } | { kind: 'pane' }
 
 interface DrawPoint { x: number; y: number; clientX: number; clientY: number }
 
 export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(function TopologyCanvas(props, ref) {
   const [zoneDrag, setZoneDrag] = useState<{ start: DrawPoint; current: DrawPoint } | null>(null)
+  const [legendPinned, setLegendPinned] = useState(false)
+  const [legendHovered, setLegendHovered] = useState(false)
+  const cursorBadgeRef = useRef<HTMLDivElement>(null)
+  const [contextMenu, setContextMenu] = useState<CanvasContextMenu | null>(null)
+  const activeTool = props.deleteMode ? 'Delete' : props.textToolMode ? 'Place text' : props.zoneToolMode ? 'Draw zone' : props.cableMode ? 'Connect' : null
+
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = () => setContextMenu(null)
+    const closeWithEscape = (event: KeyboardEvent) => event.key === 'Escape' && close()
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('keydown', closeWithEscape)
+    window.addEventListener('blur', close)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('keydown', closeWithEscape)
+      window.removeEventListener('blur', close)
+    }
+  }, [contextMenu])
+
+  const openContextMenu = (event: { clientX: number; clientY: number; preventDefault: () => void; stopPropagation: () => void }, menu: CanvasContextRequest) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const width = menu.kind === 'node' ? 218 : 198
+    const height = menu.kind === 'node' ? 176 : menu.kind === 'edge' ? 50 : 132
+    setContextMenu({ ...menu, x: Math.min(event.clientX, window.innerWidth - width - 8), y: Math.min(event.clientY, window.innerHeight - height - 8) } as CanvasContextMenu)
+  }
+
+  const runContextAction = (action: CanvasContextAction) => {
+    if (!contextMenu) return
+    props.onContextAction(action, contextMenu.kind === 'pane' ? undefined : contextMenu.target)
+    setContextMenu(null)
+  }
   const renderedNodes = useMemo(() => [...props.nodes].sort((a, b) => (a.data.deviceType === 'zone' ? -1 : 0) - (b.data.deviceType === 'zone' ? -1 : 0)).map((node) => ({
     ...node,
     zIndex: node.data.deviceType === 'zone' ? 0 : 2,
@@ -144,7 +184,11 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
   }, [props.edges])
 
   return (
-    <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.textToolMode ? 'text-mode' : ''} ${props.zoneToolMode ? 'zone-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'} ${props.portSelection ? 'port-selection-enabled' : ''}`} ref={ref}>
+    <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.textToolMode ? 'text-mode' : ''} ${props.zoneToolMode ? 'zone-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'} ${props.portSelection ? 'port-selection-enabled' : ''}`} ref={ref} onPointerMove={(event) => {
+      if (!activeTool || !cursorBadgeRef.current) return
+      cursorBadgeRef.current.style.visibility = 'visible'
+      cursorBadgeRef.current.style.transform = `translate3d(${event.clientX + 15}px, ${event.clientY + 17}px, 0)`
+    }} onPointerLeave={() => { if (cursorBadgeRef.current) cursorBadgeRef.current.style.visibility = 'hidden' }}>
       {props.nodes.length === 0 && <div className="empty-canvas"><span className="empty-canvas__glyph">+</span><h2>Build your network</h2><p>Drag a device here to start building your topology.</p></div>}
       <ReactFlow<TopologyNode, TopologyEdge>
         nodes={renderedNodes}
@@ -154,6 +198,7 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
         onNodesChange={props.onNodesChange}
         onEdgesChange={props.onEdgesChange}
         onInit={props.onInit}
+        onMove={(_, viewport) => props.onZoomChange(viewport.zoom)}
         onNodeClick={(event, node) => {
           const element = (event.target as Element).closest('.react-flow__node') as HTMLElement | null
           if (!element) return
@@ -162,9 +207,12 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
           props.onNodeClick(node, nearestOutlineHandle((event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height))
         }}
         onEdgeClick={(event, edge) => { event.stopPropagation(); props.onEdgeClick(edge) }}
+        onNodeContextMenu={(event, node) => openContextMenu(event, { kind: 'node', target: node })}
+        onEdgeContextMenu={(event, edge) => openContextMenu(event, { kind: 'edge', target: edge })}
+        onPaneContextMenu={(event) => openContextMenu(event, { kind: 'pane' })}
         onReconnect={props.onReconnect}
         onSelectionChange={({ nodes, edges }) => props.onSelectionChange(nodes[0] ?? null, edges[0] ?? null)}
-        onPaneClick={(event) => { if (props.textToolMode) props.onAddTextBox({ x: event.clientX, y: event.clientY }) }}
+        onPaneClick={(event) => { setContextMenu(null); if (props.textToolMode) props.onAddTextBox({ x: event.clientX, y: event.clientY }) }}
         onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move' }}
         onDrop={(event) => {
           event.preventDefault()
@@ -191,20 +239,39 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
         <Controls position="bottom-left" showInteractive={false} />
         <MiniMap<TopologyNode> position="bottom-right" pannable zoomable nodeStrokeWidth={3} style={{ width: 160, height: 105 }} maskColor="rgba(3, 9, 17, .68)" nodeColor={(node) => node.data.deviceType === 'zone' ? node.data.zoneColor ?? '#ef4444' : DEVICE_PRESETS[(node.type ?? 'router') as DeviceType]?.accent ?? '#0d6efd'} />
         <div className="canvas-badge">CANVAS · {props.nodes.filter((node) => node.data.deviceType !== 'text-box' && node.data.deviceType !== 'zone').length} DEVICES · {props.edges.length} LINK{props.edges.length === 1 ? '' : 'S'}{props.showCables ? '' : ' · HIDDEN'}</div>
-        <aside className="topology-legend" aria-label="Connection legend">
-          <div className="topology-legend__heading"><strong>LEGEND</strong><span>{cableLegend.length} STYLE{cableLegend.length === 1 ? '' : 'S'}</span></div>
-          {cableLegend.length ? <div className="topology-legend__items">{cableLegend.map((item) => (
+        <aside className={`topology-legend ${legendPinned || legendHovered ? 'is-expanded' : ''} ${legendPinned ? 'is-pinned' : ''}`} aria-label="Connection legend" onMouseEnter={() => setLegendHovered(true)} onMouseLeave={() => setLegendHovered(false)}>
+          <button className="topology-legend__heading" onClick={() => setLegendPinned((current) => !current)} aria-expanded={legendPinned || legendHovered} title={legendPinned ? 'Collapse connection legend' : 'Open and pin connection legend'}><strong>LEGEND</strong><span>{cableLegend.length} STYLE{cableLegend.length === 1 ? '' : 'S'}</span><ChevronDown size={13} /></button>
+          {(legendPinned || legendHovered) && (cableLegend.length ? <div className="topology-legend__items">{cableLegend.map((item) => (
             <div className="topology-legend__item" key={`${item.color}-${item.dash ?? 'solid'}-${item.label}`}>
               <i style={{ '--legend-color': item.color, '--legend-width': `${item.width}px`, '--legend-dash': item.dash ? 'dashed' : 'solid' } as React.CSSProperties} />
               <span>{item.label}</span>
             </div>
-          ))}</div> : <p>No cables yet</p>}
+          ))}</div> : <p>No cables yet</p>)}
         </aside>
         {props.cableStatus && <div className="cable-mode-badge"><span />{props.cableStatus}<kbd>ESC</kbd></div>}
         {props.deleteMode && <div className="delete-mode-badge"><Trash2 size={14} />Click a device or cable to remove it<kbd>ESC</kbd></div>}
         {props.textToolMode && <div className="text-mode-badge"><Type size={14} />Click the canvas to place a text box<kbd>ESC</kbd></div>}
         {props.zoneToolMode && <div className="zone-mode-badge"><SquareDashed size={14} />Drag on the canvas to draw a zone<kbd>ESC</kbd></div>}
       </ReactFlow>
+      {activeTool && <div ref={cursorBadgeRef} className={`active-tool-cursor active-tool-cursor--${props.deleteMode ? 'delete' : props.textToolMode ? 'text' : props.zoneToolMode ? 'zone' : 'cable'}`}>
+        {props.deleteMode ? <Trash2 size={13} /> : props.textToolMode ? <Type size={13} /> : props.zoneToolMode ? <SquareDashed size={13} /> : <Cable size={13} />}
+        <span>{activeTool}</span>
+      </div>}
+      {contextMenu && <div className="canvas-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} role="menu">
+        {contextMenu.kind === 'node' && <>
+          <button onClick={() => runContextAction('copy')} role="menuitem"><Copy size={15} /><span>Copy selection</span><kbd>Ctrl+C</kbd></button>
+          <button onClick={() => runContextAction('duplicate')} role="menuitem"><ClipboardPaste size={15} /><span>Duplicate</span></button>
+          {contextMenu.target.data.deviceType !== 'zone' && contextMenu.target.data.deviceType !== 'text-box' && <button onClick={() => runContextAction('zone')} role="menuitem"><SquareDashed size={15} /><span>Create zone around</span></button>}
+          <div className="canvas-context-menu__divider" />
+          <button className="is-danger" onClick={() => runContextAction('delete')} role="menuitem"><Trash2 size={15} /><span>Delete</span><kbd>Del</kbd></button>
+        </>}
+        {contextMenu.kind === 'edge' && <button className="is-danger" onClick={() => runContextAction('delete')} role="menuitem"><Trash2 size={15} /><span>Delete connection</span><kbd>Del</kbd></button>}
+        {contextMenu.kind === 'pane' && <>
+          <button onClick={() => runContextAction('paste')} disabled={!props.hasClipboard} role="menuitem"><ClipboardPaste size={15} /><span>Paste</span><kbd>Ctrl+V</kbd></button>
+          <button onClick={() => runContextAction('arrange')} role="menuitem"><LayoutGrid size={15} /><span>Arrange topology</span></button>
+          <button onClick={() => runContextAction('fit')} role="menuitem"><Maximize2 size={15} /><span>Fit and center</span><kbd>F</kbd></button>
+        </>}
+      </div>}
       {props.zoneToolMode && <div
         className="zone-draw-layer"
         onPointerDown={(event) => {
