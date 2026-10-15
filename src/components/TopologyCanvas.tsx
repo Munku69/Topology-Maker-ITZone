@@ -52,15 +52,33 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
   })), [props.cableSourceNodeId, props.nodes])
 
   const renderedEdges = useMemo(() => {
-    const groups = new Map<string, TopologyEdge[]>()
     const endpointGroups = new Map<string, string[]>()
+    const routeGroups = new Map<string, string[]>()
+    const nodeById = new Map(props.nodes.map((node) => [node.id, node]))
+    const isHorizontalHandle = (handleId: string | null | undefined): boolean => {
+      const handle = handleId ?? 'right'
+      return handle.includes('left') || handle.includes('right')
+    }
+    const routeGroupKey = (edge: TopologyEdge): string => {
+      const sourceNode = nodeById.get(edge.source)
+      const targetNode = nodeById.get(edge.target)
+      const horizontal = isHorizontalHandle(edge.sourceHandle)
+      const sourceCenter = horizontal
+        ? (sourceNode?.position.x ?? 0) + (sourceNode?.width ?? 112) / 2
+        : (sourceNode?.position.y ?? 0) + (sourceNode?.height ?? 112) / 2
+      const targetCenter = horizontal
+        ? (targetNode?.position.x ?? 0) + (targetNode?.width ?? 112) / 2
+        : (targetNode?.position.y ?? 0) + (targetNode?.height ?? 112) / 2
+      const corridor = (sourceCenter + targetCenter) / 2
+      return `${horizontal ? 'x' : 'y'}:${Math.round(corridor / 24)}`
+    }
     props.edges.forEach((edge) => {
-      const key = [edge.source, edge.target].sort().join('::')
-      groups.set(key, [...(groups.get(key) ?? []), edge])
       const sourceKey = `${edge.source}::${edge.sourceHandle ?? 'right'}`
       const targetKey = `${edge.target}::${edge.targetHandle ?? 'left'}`
+      const routeKey = routeGroupKey(edge)
       endpointGroups.set(sourceKey, [...(endpointGroups.get(sourceKey) ?? []), `${edge.id}:source`])
       endpointGroups.set(targetKey, [...(endpointGroups.get(targetKey) ?? []), `${edge.id}:target`])
+      routeGroups.set(routeKey, [...(routeGroups.get(routeKey) ?? []), edge.id])
     })
 
     const endpointLaneOffset = (key: string, token: string): number => {
@@ -71,13 +89,11 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
     }
 
     return props.edges.map((edge) => {
-      const key = [edge.source, edge.target].sort().join('::')
-      const group = groups.get(key) ?? [edge]
-      const index = group.findIndex((item) => item.id === edge.id)
-      const centeredIndex = index - (group.length - 1) / 2
-      const direction = edge.source.localeCompare(edge.target) <= 0 ? 1 : -1
       const sourceKey = `${edge.source}::${edge.sourceHandle ?? 'right'}`
       const targetKey = `${edge.target}::${edge.targetHandle ?? 'left'}`
+      const routeGroup = routeGroups.get(routeGroupKey(edge)) ?? [edge.id]
+      const routeIndex = routeGroup.indexOf(edge.id)
+      const centeredRouteIndex = routeIndex - (routeGroup.length - 1) / 2
       const data = edge.data ?? { cableType: 'copper-straight', sourceInterface: '', targetInterface: '', description: '' }
       const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
       const label = props.portSelection ? interfaceLabel : ''
@@ -88,13 +104,14 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
         label,
         data: {
           ...data,
-          parallelOffset: centeredIndex * 34 * direction,
+          parallelOffset: centeredRouteIndex * 10,
+          routingLaneIndex: routeIndex,
           sourceLaneOffset: endpointLaneOffset(sourceKey, `${edge.id}:source`),
           targetLaneOffset: endpointLaneOffset(targetKey, `${edge.id}:target`),
         },
       }
     })
-  }, [props.edges, props.portSelection])
+  }, [props.edges, props.nodes, props.portSelection])
 
   return (
     <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.textToolMode ? 'text-mode' : ''} ${props.zoneToolMode ? 'zone-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'} ${props.portSelection ? 'port-selection-enabled' : ''}`} ref={ref}>

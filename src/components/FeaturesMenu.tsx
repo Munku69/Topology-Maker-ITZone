@@ -1,5 +1,5 @@
 import { Cable, EthernetPort, Tags, SlidersHorizontal } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 interface FeaturesMenuProps {
   showCables: boolean
@@ -28,9 +28,28 @@ function FeatureToggle({ icon, title, description, checked, onChange }: {
 }
 
 export function FeaturesMenu(props: FeaturesMenuProps) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDetailsElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick, true)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick, true)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
   return (
-    <details className="features-menu">
-      <summary className="toolbar-button" title="Topology display and connection features"><SlidersHorizontal size={16} /><span>Features</span></summary>
+    <details ref={menuRef} className="features-menu" open={open}>
+      <summary className="toolbar-button" title="Topology display and connection features" onClick={(event) => { event.preventDefault(); setOpen((current) => !current) }}><SlidersHorizontal size={16} /><span>Features</span></summary>
       <div className="features-menu__panel">
         <div className="features-menu__heading"><p className="eyebrow">Workspace</p><strong>Features</strong></div>
         <FeatureToggle icon={<Cable size={17} />} title="Show cables" description="Display links on the canvas" checked={props.showCables} onChange={props.onShowCablesChange} />

@@ -120,7 +120,7 @@ function routeLength(points: Point[]): number {
   return points.slice(1).reduce((total, point, index) => total + Math.abs(point.x - points[index]!.x) + Math.abs(point.y - points[index]!.y), 0)
 }
 
-function routedLeads(sourceLead: Point, targetLead: Point, horizontalStart: boolean, offset: number, obstacles: Bounds[]): Point[] {
+function routedLeads(sourceLead: Point, targetLead: Point, horizontalStart: boolean, offset: number, laneIndex: number, obstacles: Bounds[]): Point[] {
   const preferredX = (sourceLead.x + targetLead.x) / 2 + offset
   const preferredY = (sourceLead.y + targetLead.y) / 2 + offset
   const preferred = horizontalStart
@@ -129,7 +129,7 @@ function routedLeads(sourceLead: Point, targetLead: Point, horizontalStart: bool
 
   if (isClear(preferred, obstacles)) return preferred
 
-  const lane = offset === 0 ? 0 : Math.abs(offset) + (offset < 0 ? 8 : 0)
+  const lane = 12 + laneIndex * 8
   const xCandidates = [
     preferredX,
     sourceLead.x,
@@ -179,7 +179,7 @@ export function ParallelCableEdge({
     .map((node) => visualBounds(nodeLookup.get(node.id)))
     .filter((bounds): bounds is Bounds => bounds !== null)
   const obstacles = [sourceBounds, targetBounds, ...otherDeviceBounds].filter((bounds): bounds is Bounds => bounds !== null).map(expanded)
-  const routed = routedLeads(sourceLead, targetLead, horizontalStart, offset, obstacles)
+  const routed = routedLeads(sourceLead, targetLead, horizontalStart, offset, data?.routingLaneIndex ?? 0, obstacles)
   const points = compactPoints([source, ...routed, target])
   const path = roundedPath(points)
   const labelPoint = midpoint(points)

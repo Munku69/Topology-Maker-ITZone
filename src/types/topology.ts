@@ -46,6 +46,7 @@ export interface ConnectionData extends Record<string, unknown> {
   targetInterface: string
   description: string
   parallelOffset?: number
+  routingLaneIndex?: number
   sourceLaneOffset?: number
   targetLaneOffset?: number
 }
