@@ -109,7 +109,7 @@ function DeviceNodeView({ id, data, selected }: NodeProps<TopologyNode>) {
       </div>
       <div className="device-node__caption">
         <strong className="device-node__name">{data.name || preset.defaultName}</strong>
-        <span className={`device-node__ip ${data.managementIp ? '' : 'is-empty'}`}>{data.managementIp || preset.label}</span>
+        {data.managementIp && <span className="device-node__ip">{data.managementIp}</span>}
       </div>
     </div>
   )
