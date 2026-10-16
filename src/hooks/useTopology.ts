@@ -456,16 +456,19 @@ export function useTopology() {
   }, [loadIntoEditor, persistCurrent, writeLibrary])
 
   const deleteProject = useCallback((id: string) => {
-    if (id !== activeProjectIdRef.current) persistCurrent()
-    let remaining = projectsRef.current.filter((project) => project.id !== id)
-    if (!remaining.length) remaining = [createBlankProject()]
-    if (id === activeProjectIdRef.current) {
-      const nextActive = [...remaining].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!
-      writeLibrary(remaining, nextActive.id)
-      loadIntoEditor(nextActive)
-    } else {
-      writeLibrary(remaining)
+    const deletingActiveProject = id === activeProjectIdRef.current
+    if (!deletingActiveProject) {
+      persistCurrent()
+      const remaining = projectsRef.current.filter((project) => project.id !== id)
+      writeLibrary(remaining, activeProjectIdRef.current)
+      return false
     }
+
+    const blankProject = createBlankProject('Untitled Network')
+    const remaining = [...projectsRef.current.filter((project) => project.id !== id), blankProject]
+    writeLibrary(remaining, blankProject.id)
+    loadIntoEditor(blankProject)
+    return true
   }, [loadIntoEditor, persistCurrent, writeLibrary])
 
   const projectSummaries: ProjectSummary[] = projects.map((project) => ({

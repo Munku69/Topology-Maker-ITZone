@@ -44,14 +44,22 @@ const ICON_BOUNDS: Partial<Record<DeviceType, IconBounds>> = {
   xdr: [9.8, 14.1, 9.7, 14],
 }
 
-function getIconLayout(type: DeviceType): React.CSSProperties {
+export function getDeviceNodeSize(type: DeviceType): { width: number; height: number } {
   const [left, top, right, bottom] = ICON_BOUNDS[type] ?? [0, 0, 0, 0]
   const contentWidth = 100 - left - right
   const contentHeight = 100 - top - bottom
   const pixelsPerPercent = 112 / Math.max(contentWidth, contentHeight)
+  return { width: contentWidth * pixelsPerPercent, height: contentHeight * pixelsPerPercent }
+}
+
+function getIconLayout(type: DeviceType): React.CSSProperties {
+  const [left, top] = ICON_BOUNDS[type] ?? [0, 0, 0, 0]
+  const { width, height } = getDeviceNodeSize(type)
+  const contentWidth = 100 - (ICON_BOUNDS[type]?.[0] ?? 0) - (ICON_BOUNDS[type]?.[2] ?? 0)
+  const pixelsPerPercent = width / contentWidth
   return {
-    '--node-width': `${contentWidth * pixelsPerPercent}px`,
-    '--node-height': `${contentHeight * pixelsPerPercent}px`,
+    '--node-width': `${width}px`,
+    '--node-height': `${height}px`,
     '--icon-size': `${100 * pixelsPerPercent}px`,
     '--icon-left': `${-left * pixelsPerPercent}px`,
     '--icon-top': `${-top * pixelsPerPercent}px`,
