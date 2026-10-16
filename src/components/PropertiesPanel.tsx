@@ -2,6 +2,7 @@ import { Cable, ChevronDown, Network, PanelRightClose, Plus, SquareDashed, Trash
 import { DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_PRESETS } from '../constants/cables'
 import { LINK_PURPOSES, LINK_SPEEDS, type CablePathStyle, type CableType, type DeviceData, type DeviceInterface, type DeviceType, type LinkPurpose, type LinkSpeed, type TextBoxBackgroundStyle, type TopologyEdge, type TopologyNode, type ZoneLineStyle } from '../types/topology'
+import { LinkCountInput } from './LinkCountInput'
 
 interface PropertiesPanelProps {
   selectedNode: TopologyNode | null
@@ -117,7 +118,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
             <label className="field"><span>Path style</span><div className="select-wrap"><select value={selectedEdge.data?.pathStyle ?? 'straight'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { pathStyle: event.target.value as CablePathStyle })}><option value="straight">Straight</option><option value="curved">Curved</option><option value="orthogonal">90° turns</option></select><ChevronDown size={15} /></div></label>
             <label className="field"><span>Cable color</span><div className="zone-property-color"><input type="color" value={selectedEdge.data?.color ?? CABLE_PRESETS[selectedEdge.data?.cableType ?? 'copper-straight'].color} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { color: event.target.value })} /><code>{selectedEdge.data?.color ?? CABLE_PRESETS[selectedEdge.data?.cableType ?? 'copper-straight'].color}</code></div></label>
             <div className="two-col">
-              <label className="field"><span>Link count</span><input type="number" min="1" max="64" value={selectedEdge.data?.linkCount ?? 1} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { linkCount: Math.min(64, Math.max(1, Number.parseInt(event.target.value, 10) || 1)) })} /></label>
+              <label className="field"><span>Link count</span><LinkCountInput key={selectedEdge.id} value={selectedEdge.data?.linkCount ?? 1} onChange={(linkCount) => props.onUpdateEdge(selectedEdge.id, { linkCount })} /></label>
               <label className="field"><span>Link speed</span><div className="select-wrap"><select value={selectedEdge.data?.speed ?? 'Auto'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { speed: event.target.value as LinkSpeed })}>{LINK_SPEEDS.map((speed) => <option key={speed}>{speed}</option>)}</select><ChevronDown size={15} /></div></label>
             </div>
             <label className="field"><span>Purpose</span><div className="select-wrap"><select value={selectedEdge.data?.purpose ?? 'Data'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { purpose: event.target.value as LinkPurpose })}>{LINK_PURPOSES.map((purpose) => <option key={purpose}>{purpose}</option>)}</select><ChevronDown size={15} /></div></label>

@@ -3,6 +3,7 @@ import { Activity, Cable, ChevronDown, CornerDownRight, Minus, PanelLeftClose, R
 import { DEVICE_GROUPS, DEVICE_PRESETS } from '../constants/devices'
 import { CABLE_COLORS, CABLE_PRESETS } from '../constants/cables'
 import { LINK_PURPOSES, LINK_SPEEDS, type CablePathStyle, type CableType, type DeviceCategory, type DeviceType, type LinkPurpose, type LinkSpeed } from '../types/topology'
+import { LinkCountInput } from './LinkCountInput'
 
 const cableIcons = { 'copper-straight': Cable, 'copper-crossover': Shuffle, fiber: Activity, serial: Radio }
 
@@ -115,7 +116,7 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
             <span className="cable-custom-color"><input type="color" value={cableColor} onChange={(event) => onCableColorChange(event.target.value)} title="Custom cable color" /></span>
           </div></label>
           <div className="cable-option-grid">
-            <label><span>Count</span><input type="number" min="1" max="64" value={cableCount} onChange={(event) => onCableCountChange(Math.min(64, Math.max(1, Number.parseInt(event.target.value, 10) || 1)))} /></label>
+            <label><span>Count</span><LinkCountInput value={cableCount} onChange={onCableCountChange} /></label>
             <label><span>Speed</span><select value={cableSpeed} onChange={(event) => onCableSpeedChange(event.target.value as LinkSpeed)}>{LINK_SPEEDS.map((speed) => <option key={speed}>{speed}</option>)}</select></label>
             <label><span>Purpose</span><select value={cablePurpose} onChange={(event) => onCablePurposeChange(event.target.value as LinkPurpose)}>{LINK_PURPOSES.map((purpose) => <option key={purpose}>{purpose}</option>)}</select></label>
           </div>

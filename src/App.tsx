@@ -141,7 +141,7 @@ function App() {
     }
   }
 
-  const performExport = async (kind: 'pdf' | 'png', background: ExportBackground, pdfLayout: PdfLayout = 'standard', pdfDetails: PdfExportDetails = { author: '', notes: '' }) => {
+  const performExport = async (kind: 'pdf' | 'png', background: ExportBackground, pdfLayout: PdfLayout = 'standard', pdfDetails: PdfExportDetails = { author: '', notes: '', includePortInfo: false }) => {
     if (!topology.nodes.length) { notify('info', 'Add at least one device or text box before exporting a diagram.'); return }
     setExporting(true)
     try {

@@ -314,7 +314,7 @@ export async function exportTopologyPdf(
   edges: TopologyEdge[],
   background: ExportBackground = 'canvas',
   layout: PdfLayout = 'standard',
-  details: PdfExportDetails = { author: '', notes: '' },
+  details: PdfExportDetails = { author: '', notes: '', includePortInfo: false },
 ): Promise<void> {
   const rendered = await renderCompleteDiagram(nodes, background)
   const deviceNodes = nodes.filter((node) => node.data.deviceType !== 'text-box' && node.data.deviceType !== 'zone')
@@ -355,6 +355,6 @@ export async function exportTopologyPdf(
   if (inventoryRows.length) addTable(pdf, 'DEVICE INVENTORY', ['Device', 'Type', 'Hostname', 'Management IP'], inventoryRows, [72, 52, 72, 72], generated, true)
 
   const interfaceRows = deviceNodes.flatMap((node) => node.data.interfaces.map((item) => [node.data.name, item.name, item.ip || '—', item.vlan || '—', item.role || '—', item.description || '—']))
-  if (interfaceRows.length) addTable(pdf, 'INTERFACE / IP INFORMATION', ['Device', 'Interface', 'IP / CIDR', 'VLAN', 'Role', 'Description'], interfaceRows, [48, 38, 62, 26, 36, 58], generated, true)
+  if (details.includePortInfo && interfaceRows.length) addTable(pdf, 'INTERFACE / IP INFORMATION', ['Device', 'Interface', 'IP / CIDR', 'VLAN', 'Role', 'Description'], interfaceRows, [48, 38, 62, 26, 36, 58], generated, true)
   pdf.save(`${safeFilename(projectName)}-topology-report.pdf`)
 }

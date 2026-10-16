@@ -5,4 +5,5 @@ export type PdfLayout = 'standard' | 'itzone-portrait' | 'itzone-landscape'
 export interface PdfExportDetails {
   author: string
   notes: string
+  includePortInfo: boolean
 }

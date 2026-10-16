@@ -1,4 +1,4 @@
-import { FileDown, ImageDown, Monitor, Sun, X } from 'lucide-react'
+import { EthernetPort, FileDown, ImageDown, Monitor, Sun, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ExportBackground, PdfExportDetails, PdfLayout } from '../types/export'
 
@@ -23,6 +23,7 @@ export function ExportOptionsDialog({ format, exporting, onCancel, onFormatChang
   const [pdfLayout, setPdfLayout] = useState<PdfLayout>('itzone-landscape')
   const [author, setAuthor] = useState('')
   const [notes, setNotes] = useState('')
+  const [includePortInfo, setIncludePortInfo] = useState(false)
 
   useEffect(() => {
     if (!format) return
@@ -30,6 +31,7 @@ export function ExportOptionsDialog({ format, exporting, onCancel, onFormatChang
     setPdfLayout('itzone-landscape')
     setAuthor('')
     setNotes('')
+    setIncludePortInfo(false)
   }, [format])
 
   if (!format) return null
@@ -76,6 +78,18 @@ export function ExportOptionsDialog({ format, exporting, onCancel, onFormatChang
           </section>
         )}
 
+        {!isPng && (
+          <section className="export-option-section">
+            <label>Report contents</label>
+            <label className="feature-option export-port-option">
+              <span className="feature-option__icon"><EthernetPort size={17} /></span>
+              <span className="feature-option__copy"><strong>Include port information</strong><small>Add interface names, IP addresses, VLANs, roles, and descriptions to the PDF report.</small></span>
+              <input type="checkbox" checked={includePortInfo} onChange={(event) => setIncludePortInfo(event.target.checked)} disabled={exporting} />
+              <span className="feature-switch" aria-hidden="true"><span /></span>
+            </label>
+          </section>
+        )}
+
         <section className="export-option-section">
           <label>Diagram background</label>
           <div className="export-background-options">
@@ -92,7 +106,7 @@ export function ExportOptionsDialog({ format, exporting, onCancel, onFormatChang
 
         <div className="dialog-actions">
           <button className="button button--ghost" onClick={onCancel} disabled={exporting}>Cancel</button>
-          <button className="button button--primary" onClick={() => onExport(background, pdfLayout, { author: author.trim(), notes: notes.trim() })} disabled={exporting}><FormatIcon size={15} /> Export {format.toUpperCase()}</button>
+          <button className="button button--primary" onClick={() => onExport(background, pdfLayout, { author: author.trim(), notes: notes.trim(), includePortInfo })} disabled={exporting}><FormatIcon size={15} /> Export {format.toUpperCase()}</button>
         </div>
       </div>
     </div>
