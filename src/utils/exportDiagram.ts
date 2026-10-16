@@ -53,7 +53,7 @@ async function renderCompleteDiagram(nodes: TopologyNode[], background: ExportBa
     pixelRatio: 2,
     cacheBust: true,
     style: exportStyle,
-    filter: (node) => !(node instanceof HTMLElement) || !node.classList.contains('react-flow__attribution'),
+    filter: (node) => !(node instanceof HTMLElement) || (!node.classList.contains('react-flow__attribution') && !node.classList.contains('cable-bend-handle')),
   })
   return { dataUrl, width, height }
 }

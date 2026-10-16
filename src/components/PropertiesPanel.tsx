@@ -117,9 +117,10 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
             <label className="field"><span>Path style</span><div className="select-wrap"><select value={selectedEdge.data?.pathStyle ?? 'straight'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { pathStyle: event.target.value as CablePathStyle })}><option value="straight">Straight</option><option value="curved">Curved</option><option value="orthogonal">90° turns</option></select><ChevronDown size={15} /></div></label>
             <label className="field"><span>Cable color</span><div className="zone-property-color"><input type="color" value={selectedEdge.data?.color ?? CABLE_PRESETS[selectedEdge.data?.cableType ?? 'copper-straight'].color} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { color: event.target.value })} /><code>{selectedEdge.data?.color ?? CABLE_PRESETS[selectedEdge.data?.cableType ?? 'copper-straight'].color}</code></div></label>
             <div className="two-col">
+              <label className="field"><span>Link count</span><input type="number" min="1" max="64" value={selectedEdge.data?.linkCount ?? 1} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { linkCount: Math.min(64, Math.max(1, Number.parseInt(event.target.value, 10) || 1)) })} /></label>
               <label className="field"><span>Link speed</span><div className="select-wrap"><select value={selectedEdge.data?.speed ?? 'Auto'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { speed: event.target.value as LinkSpeed })}>{LINK_SPEEDS.map((speed) => <option key={speed}>{speed}</option>)}</select><ChevronDown size={15} /></div></label>
-              <label className="field"><span>Purpose</span><div className="select-wrap"><select value={selectedEdge.data?.purpose ?? 'Data'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { purpose: event.target.value as LinkPurpose })}>{LINK_PURPOSES.map((purpose) => <option key={purpose}>{purpose}</option>)}</select><ChevronDown size={15} /></div></label>
             </div>
+            <label className="field"><span>Purpose</span><div className="select-wrap"><select value={selectedEdge.data?.purpose ?? 'Data'} onChange={(event) => props.onUpdateEdge(selectedEdge.id, { purpose: event.target.value as LinkPurpose })}>{LINK_PURPOSES.map((purpose) => <option key={purpose}>{purpose}</option>)}</select><ChevronDown size={15} /></div></label>
             {props.portSelection ? <>
               <PortField label={`Source interface · ${source?.data.name ?? ''}`} value={selectedEdge.data?.sourceInterface ?? ''} interfaces={source?.data.interfaces ?? []} onChange={(sourceInterface) => props.onUpdateEdge(selectedEdge.id, { sourceInterface })} />
               <PortField label={`Destination interface · ${target?.data.name ?? ''}`} value={selectedEdge.data?.targetInterface ?? ''} interfaces={target?.data.interfaces ?? []} onChange={(targetInterface) => props.onUpdateEdge(selectedEdge.id, { targetInterface })} />
@@ -127,7 +128,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
             <Field label="Description (documentation only)" value={selectedEdge.data?.description ?? ''} onChange={(description) => props.onUpdateEdge(selectedEdge.id, { description })} placeholder="Primary uplink" multiline />
             <p className="feature-disabled-note">Cable descriptions are saved but not drawn over the cable. Use the Text box tool for visible canvas notes.</p>
           </section>
-          <p className="feature-disabled-note">Drag either highlighted cable endpoint on the canvas to move it along a device outline.</p>
+          <p className="feature-disabled-note">Drag either highlighted endpoint to move the connection. Drag the circular cable handle to shape a custom curve; double-click it to reset.</p>
           <div className="connection-summary"><span className="dot" /><span>{source?.data.name ?? 'Source'}</span><span className="line" /><span>{target?.data.name ?? 'Target'}</span></div>
           <button className="danger-button" onClick={props.onDelete}><Trash2 size={16} /> Delete connection</button>
         </div>

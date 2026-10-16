@@ -14,10 +14,12 @@ interface DeviceSidebarProps {
   onSelectCable: (type: CableType) => void
   cableColor: string
   cableSpeed: LinkSpeed
+  cableCount: number
   cablePurpose: LinkPurpose
   cablePathStyle: CablePathStyle
   onCableColorChange: (value: string) => void
   onCableSpeedChange: (value: LinkSpeed) => void
+  onCableCountChange: (value: number) => void
   onCablePurposeChange: (value: LinkPurpose) => void
   onCablePathStyleChange: (value: CablePathStyle) => void
   portSelection: boolean
@@ -30,7 +32,7 @@ interface DeviceSidebarProps {
   onToggleZoneTool: () => void
 }
 
-export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, cableColor, cableSpeed, cablePurpose, cablePathStyle, onCableColorChange, onCableSpeedChange, onCablePurposeChange, onCablePathStyleChange, portSelection, onResizeStart, deleteMode, onToggleDeleteMode, textToolMode, onToggleTextTool, zoneToolMode, onToggleZoneTool }: DeviceSidebarProps) {
+export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLabel, onSelectCable, cableColor, cableSpeed, cableCount, cablePurpose, cablePathStyle, onCableColorChange, onCableSpeedChange, onCableCountChange, onCablePurposeChange, onCablePathStyleChange, portSelection, onResizeStart, deleteMode, onToggleDeleteMode, textToolMode, onToggleTextTool, zoneToolMode, onToggleZoneTool }: DeviceSidebarProps) {
   const [openGroups, setOpenGroups] = useState<Set<DeviceCategory>>(() => new Set(['network']))
   const [search, setSearch] = useState('')
   if (collapsed) return null
@@ -113,6 +115,7 @@ export function DeviceSidebar({ collapsed, onToggle, selectedCable, cableStartLa
             <span className="cable-custom-color"><input type="color" value={cableColor} onChange={(event) => onCableColorChange(event.target.value)} title="Custom cable color" /></span>
           </div></label>
           <div className="cable-option-grid">
+            <label><span>Count</span><input type="number" min="1" max="64" value={cableCount} onChange={(event) => onCableCountChange(Math.min(64, Math.max(1, Number.parseInt(event.target.value, 10) || 1)))} /></label>
             <label><span>Speed</span><select value={cableSpeed} onChange={(event) => onCableSpeedChange(event.target.value as LinkSpeed)}>{LINK_SPEEDS.map((speed) => <option key={speed}>{speed}</option>)}</select></label>
             <label><span>Purpose</span><select value={cablePurpose} onChange={(event) => onCablePurposeChange(event.target.value as LinkPurpose)}>{LINK_PURPOSES.map((purpose) => <option key={purpose}>{purpose}</option>)}</select></label>
           </div>

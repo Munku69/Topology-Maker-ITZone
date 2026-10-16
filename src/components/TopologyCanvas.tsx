@@ -29,6 +29,7 @@ interface TopologyCanvasProps {
   onNodeClick: (node: TopologyNode, handleId: string) => void
   onEdgeClick: (edge: TopologyEdge) => void
   onReconnect: (edge: TopologyEdge, connection: Connection) => void
+  onUpdateEdge: (id: string, patch: Partial<NonNullable<TopologyEdge['data']>>) => void
   cableMode: boolean
   deleteMode: boolean
   textToolMode: boolean
@@ -97,6 +98,7 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
     const routeGroups = new Map<string, string[]>()
     const speedGroups = new Map<string, string[]>()
     const nodeById = new Map(props.nodes.map((node) => [node.id, node]))
+    const edgeById = new Map(props.edges.map((edge) => [edge.id, edge]))
     const speedGroupKey = (edge: TopologyEdge): string => {
       const pair = [edge.source, edge.target].sort().join('::')
       return `${pair}::${edge.data?.speed ?? 'Auto'}::${edge.data?.purpose ?? 'Data'}::${edge.data?.cableType ?? 'copper-straight'}::${edge.data?.color ?? '#38bdf8'}`
@@ -149,15 +151,19 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
       const interfaceLabel = [data.sourceInterface, data.targetInterface].filter(Boolean).join(' ↔ ')
       const speedGroup = data.speed === 'Auto' ? [] : speedGroups.get(speedGroupKey(edge)) ?? [edge.id]
       const showSpeedLabel = speedGroup[0] === edge.id
-      const speedLabel = showSpeedLabel ? `${speedGroup.length > 1 ? `${speedGroup.length} x ` : ''}${compactSpeed(data.speed)}` : ''
+      const totalLinkCount = speedGroup.reduce((sum, edgeId) => sum + Math.max(1, edgeById.get(edgeId)?.data?.linkCount ?? 1), 0)
+      const speedLabel = showSpeedLabel ? `${totalLinkCount > 1 ? `${totalLinkCount} x ` : ''}${compactSpeed(data.speed)}` : ''
       const label = [speedLabel, props.portSelection ? interfaceLabel : ''].filter(Boolean).join('  ·  ')
+      const purposeLabel = data.purpose === 'Data' ? '' : data.purpose
+      const displayLabel = [purposeLabel, label].filter(Boolean).join('  ·  ')
       return {
         ...edge,
         type: 'parallelCable',
         zIndex: 1,
-        label,
+        label: displayLabel,
         data: {
           ...data,
+          onBendChange: props.onUpdateEdge,
           parallelOffset: centeredRouteIndex * 10,
           routingLaneIndex: routeIndex,
           sourceLaneOffset: endpointLaneOffset(sourceKey, `${edge.id}:source`),
@@ -165,7 +171,7 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
         },
       }
     })
-  }, [props.edges, props.nodes, props.portSelection])
+  }, [props.edges, props.nodes, props.onUpdateEdge, props.portSelection])
 
   const cableLegend = useMemo(() => {
     const entries = new Map<string, { color: string; dash?: string; width: number; label: string }>()

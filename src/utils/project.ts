@@ -102,9 +102,11 @@ export function validateProject(value: unknown): TopologyProject {
     if (edge.data?.cableType !== undefined && !validCableTypes.has(String(edge.data.cableType))) throw new Error('A connection has an invalid cable type.')
     if (edge.data?.color !== undefined && (typeof edge.data.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(edge.data.color))) throw new Error('A connection has an invalid color.')
     if (edge.data?.speed !== undefined && !validLinkSpeeds.has(String(edge.data.speed))) throw new Error('A connection has an invalid speed.')
+    if (edge.data?.linkCount !== undefined && (!Number.isInteger(edge.data.linkCount) || edge.data.linkCount < 1 || edge.data.linkCount > 64)) throw new Error('A connection has an invalid link count.')
     if (edge.data?.purpose !== undefined && !validLinkPurposes.has(String(edge.data.purpose))) throw new Error('A connection has an invalid purpose.')
     if (edge.data?.showCableType !== undefined && typeof edge.data.showCableType !== 'boolean') throw new Error('A connection has an invalid display mode.')
     if (edge.data?.pathStyle !== undefined && !validCablePathStyles.has(String(edge.data.pathStyle))) throw new Error('A connection has an invalid path style.')
+    if (edge.data?.curveOffset !== undefined && (!edge.data.curveOffset || typeof edge.data.curveOffset !== 'object' || !Number.isFinite(Number(edge.data.curveOffset.x)) || !Number.isFinite(Number(edge.data.curveOffset.y)))) throw new Error('A connection has an invalid manual curve.')
   }
   const edges = project.edges.map((edge) => {
     const cableType: CableType = edge.data?.cableType && validCableTypes.has(edge.data.cableType) ? edge.data.cableType : 'copper-straight'
@@ -112,12 +114,14 @@ export function validateProject(value: unknown): TopologyProject {
       cableType,
       color: edge.data?.color ?? CABLE_PRESETS[cableType].color,
       speed: edge.data?.speed && validLinkSpeeds.has(edge.data.speed) ? edge.data.speed as LinkSpeed : 'Auto',
+      linkCount: edge.data?.linkCount ?? 1,
       purpose: edge.data?.purpose && validLinkPurposes.has(edge.data.purpose) ? edge.data.purpose as LinkPurpose : 'Data',
       showCableType: edge.data?.showCableType ?? true,
       pathStyle: edge.data?.pathStyle && validCablePathStyles.has(edge.data.pathStyle) ? edge.data.pathStyle as CablePathStyle : 'orthogonal',
       sourceInterface: edge.data?.sourceInterface ?? '',
       targetInterface: edge.data?.targetInterface ?? '',
       description: edge.data?.description ?? '',
+      curveOffset: edge.data?.curveOffset ? { x: Number(edge.data.curveOffset.x), y: Number(edge.data.curveOffset.y) } : undefined,
     }
     return {
       ...edge,

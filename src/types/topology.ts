@@ -50,6 +50,7 @@ export interface ConnectionData extends Record<string, unknown> {
   cableType: CableType
   color: string
   speed: LinkSpeed
+  linkCount?: number
   purpose: LinkPurpose
   showCableType: boolean
   pathStyle: CablePathStyle
@@ -60,6 +61,7 @@ export interface ConnectionData extends Record<string, unknown> {
   routingLaneIndex?: number
   sourceLaneOffset?: number
   targetLaneOffset?: number
+  curveOffset?: { x: number; y: number }
 }
 
 export type TopologyNode = Node<DeviceData, DeviceType>

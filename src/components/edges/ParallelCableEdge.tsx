@@ -1,5 +1,6 @@
-import { BaseEdge, Position, useInternalNode, useStore, type EdgeProps } from '@xyflow/react'
-import type { DeviceData, TopologyEdge, TopologyNode } from '../../types/topology'
+import { useRef } from 'react'
+import { BaseEdge, EdgeLabelRenderer, Position, useInternalNode, useReactFlow, useStore, type EdgeProps } from '@xyflow/react'
+import type { ConnectionData, DeviceData, TopologyEdge, TopologyNode } from '../../types/topology'
 
 interface Point { x: number; y: number }
 interface Bounds { left: number; right: number; top: number; bottom: number }
@@ -154,6 +155,8 @@ export function ParallelCableEdge({
   style, selected, label, labelStyle, labelShowBg, labelBgStyle,
   labelBgPadding, labelBgBorderRadius, interactionWidth, data,
 }: EdgeProps<TopologyEdge>) {
+  const { screenToFlowPosition } = useReactFlow<TopologyNode, TopologyEdge>()
+  const bendDraggingRef = useRef(false)
   const sourceNode = useInternalNode<TopologyNode>(sourceId)
   const targetNode = useInternalNode<TopologyNode>(targetId)
   const flowNodes = useStore((state) => state.nodes)
@@ -178,15 +181,25 @@ export function ParallelCableEdge({
     .filter((bounds): bounds is Bounds => bounds !== null)
   const obstacles = [sourceBounds, targetBounds, ...otherDeviceBounds].filter((bounds): bounds is Bounds => bounds !== null).map(expanded)
   const pathStyle = data?.pathStyle ?? 'orthogonal'
+  const geometricMidpoint = { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 }
   let path: string
   let labelPoint: Point
   if (pathStyle === 'straight') {
     path = `M ${source.x},${source.y} L ${target.x},${target.y}`
     labelPoint = { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 }
   } else if (pathStyle === 'curved') {
-    const curve = bezierPath(source, target, sourceDirection, targetDirection, offset)
-    path = curve.path
-    labelPoint = curve.label
+    if (data?.curveOffset) {
+      labelPoint = { x: geometricMidpoint.x + data.curveOffset.x, y: geometricMidpoint.y + data.curveOffset.y }
+      const control = {
+        x: 2 * labelPoint.x - (source.x + target.x) / 2,
+        y: 2 * labelPoint.y - (source.y + target.y) / 2,
+      }
+      path = `M ${source.x},${source.y} Q ${control.x},${control.y} ${target.x},${target.y}`
+    } else {
+      const curve = bezierPath(source, target, sourceDirection, targetDirection, offset)
+      path = curve.path
+      labelPoint = curve.label
+    }
   } else {
     const routed = routedLeads(sourceLead, targetLead, horizontalStart, offset, data?.routingLaneIndex ?? 0, obstacles)
     const points = compactPoints([source, ...routed, target])
@@ -194,20 +207,61 @@ export function ParallelCableEdge({
     labelPoint = midpoint(points)
   }
 
-  return <BaseEdge
-    id={id}
-    path={path}
-    markerStart={markerStart}
-    markerEnd={markerEnd}
-    interactionWidth={interactionWidth ?? 18}
-    style={{ ...style, filter: selected ? 'drop-shadow(0 0 3px currentColor)' : style?.filter }}
-    label={label}
-    labelX={labelPoint.x}
-    labelY={labelPoint.y}
-    labelStyle={labelStyle}
-    labelShowBg={labelShowBg}
-    labelBgStyle={labelBgStyle}
-    labelBgPadding={labelBgPadding}
-    labelBgBorderRadius={labelBgBorderRadius}
-  />
+  const updateBend = data?.onBendChange as ((edgeId: string, patch: Partial<ConnectionData>) => void) | undefined
+
+  return <>
+    <BaseEdge
+      id={id}
+      path={path}
+      markerStart={markerStart}
+      markerEnd={markerEnd}
+      interactionWidth={interactionWidth ?? 18}
+      style={{ ...style, filter: selected ? 'drop-shadow(0 0 3px currentColor)' : style?.filter }}
+      label={label}
+      labelX={labelPoint.x}
+      labelY={labelPoint.y}
+      labelStyle={labelStyle}
+      labelShowBg={labelShowBg}
+      labelBgStyle={labelBgStyle}
+      labelBgPadding={labelBgPadding}
+      labelBgBorderRadius={labelBgBorderRadius}
+    />
+    {selected && updateBend && <EdgeLabelRenderer>
+      <button
+        type="button"
+        className="cable-bend-handle nodrag nopan"
+        style={{ transform: `translate(-50%, -50%) translate(${labelPoint.x}px, ${labelPoint.y}px)`, borderColor: data?.color ?? '#38bdf8' }}
+        aria-label="Drag to curve cable"
+        title="Drag to curve cable · Double-click to reset"
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          bendDraggingRef.current = true
+          event.currentTarget.setPointerCapture(event.pointerId)
+          event.currentTarget.classList.add('is-dragging')
+        }}
+        onPointerMove={(event) => {
+          if (!bendDraggingRef.current) return
+          event.preventDefault()
+          event.stopPropagation()
+          const point = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+          updateBend(id, { pathStyle: 'curved', curveOffset: { x: point.x - geometricMidpoint.x, y: point.y - geometricMidpoint.y } })
+        }}
+        onPointerUp={(event) => {
+          bendDraggingRef.current = false
+          event.currentTarget.releasePointerCapture(event.pointerId)
+          event.currentTarget.classList.remove('is-dragging')
+        }}
+        onPointerCancel={(event) => {
+          bendDraggingRef.current = false
+          event.currentTarget.classList.remove('is-dragging')
+        }}
+        onDoubleClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          updateBend(id, { pathStyle: 'curved', curveOffset: undefined })
+        }}
+      ><span /></button>
+    </EdgeLabelRenderer>}
+  </>
 }

@@ -220,8 +220,10 @@ button { color: inherit; }
 .cable-color-options > button.is-selected { border-color: #081522; box-shadow: 0 0 0 2px #e6f3f8; }
 .cable-custom-color { display: grid; place-items: center; width: 22px; height: 22px; overflow: hidden; background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); border: 1px solid #486277; border-radius: 50%; }
 .cable-custom-color input { width: 30px; height: 30px; padding: 0; opacity: 0; cursor: pointer; }
-.cable-option-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.cable-option-grid select { width: 100%; min-width: 0; height: 29px; padding: 0 22px 0 7px; color: #dceaf2; font-size: 9px; background: #081522; border: 1px solid #263c4e; border-radius: 3px; outline: none; }
+.cable-option-grid { display: grid; grid-template-columns: .62fr 1fr 1fr; gap: 7px; }
+.cable-option-grid select,
+.cable-option-grid input { width: 100%; min-width: 0; height: 29px; padding: 0 7px; color: #dceaf2; font-size: 9px; background: #081522; border: 1px solid #263c4e; border-radius: 3px; outline: none; }
+.cable-option-grid select { padding-right: 20px; }
 .cable-progress { display: grid; grid-template-columns: 20px minmax(0, 1fr); grid-template-areas: "step-one label-one" "connector ." "step-two label-two"; gap: 4px 7px; margin-top: 9px; padding: 9px; color: #647f92; background: #091724; border: 1px solid #203649; border-radius: 6px; }
 .cable-progress > span { display: grid; place-items: center; width: 20px; height: 20px; color: #7993a4; font-size: 9px; font-weight: 800; background: #13283a; border: 1px solid #2b465a; border-radius: 50%; }
 .cable-progress > span:first-of-type { grid-area: step-one; }
@@ -239,6 +241,10 @@ button { color: inherit; }
 .canvas-shell .react-flow { background: #07101d; }
 .react-flow__edge.selected .react-flow__edge-path { stroke: #38bdf8 !important; stroke-width: 3 !important; filter: drop-shadow(0 0 4px rgba(56,189,248,.55)); }
 .react-flow__edge-textbg { stroke: #284257; stroke-width: .5; }
+.cable-bend-handle { position: absolute; z-index: 12; display: grid; place-items: center; width: 17px; height: 17px; padding: 0; background: #ffffff; border: 2px solid #38bdf8; border-radius: 50%; box-shadow: 0 2px 7px rgba(0,0,0,.32), 0 0 0 3px rgba(255,255,255,.52); cursor: grab; pointer-events: all; touch-action: none; }
+.cable-bend-handle:hover { width: 19px; height: 19px; }
+.cable-bend-handle.is-dragging { cursor: grabbing; box-shadow: 0 3px 10px rgba(0,0,0,.38), 0 0 0 4px rgba(56,189,248,.24); }
+.cable-bend-handle > span { width: 4px; height: 4px; background: #253746; border-radius: 50%; pointer-events: none; }
 .react-flow__controls { overflow: hidden; border: 1px solid #2a4256 !important; border-radius: 7px !important; box-shadow: 0 8px 24px rgba(0,0,0,.28) !important; }
 .react-flow__controls-button { width: 30px !important; height: 30px !important; color: #abc1ce !important; background: #102132 !important; border-color: #263b4d !important; }
 .react-flow__controls-button:hover { background: #193044 !important; }
@@ -538,7 +544,8 @@ button { color: inherit; }
 :root[data-theme='light'] .cable-path-options button { color: #5e7789; background: #ffffff; border-color: #c6d5df; }
 :root[data-theme='light'] .cable-path-options button:hover { color: #1f3d51; border-color: #91afc0; }
 :root[data-theme='light'] .cable-path-options button.is-selected { color: #157ba3; background: #eaf7fc; border-color: #159ccc; }
-:root[data-theme='light'] .cable-option-grid select { color: #29495e; background: #ffffff; border-color: #b9cbd7; }
+:root[data-theme='light'] .cable-option-grid select,
+:root[data-theme='light'] .cable-option-grid input { color: #29495e; background: #ffffff; border-color: #b9cbd7; }
 :root[data-theme='light'] .cable-color-options > button.is-selected { border-color: #ffffff; box-shadow: 0 0 0 2px #17364b; }
 :root[data-theme='light'] .cable-progress { color: #5f788a; background: #edf4f8; border-color: #c6d5df; }
 :root[data-theme='light'] .cable-progress > span { color: #5c7485; background: #ffffff; border-color: #b9cbd7; }
@@ -774,6 +781,8 @@ button { color: inherit; }
 :root[data-theme='light'] .react-flow__background pattern circle { fill: #273844; }
 :root[data-theme] .react-flow__edge-text { fill: var(--edge-label-text) !important; }
 :root[data-theme] .react-flow__edge-textbg { fill: var(--edge-label-bg) !important; fill-opacity: .96 !important; stroke: var(--edge-label-border) !important; stroke-width: .75px; }
+:root[data-theme] .cable-bend-handle { background: var(--itz-surface); box-shadow: 0 2px 7px var(--itz-shadow), 0 0 0 3px color-mix(in srgb, var(--itz-surface) 64%, transparent); }
+:root[data-theme] .cable-bend-handle > span { background: var(--itz-text); }
 :root[data-theme] .canvas-badge { color: var(--itz-text-muted); background: var(--itz-surface); border-color: var(--itz-line); border-radius: 2px; backdrop-filter: none; }
 :root[data-theme] .topology-legend { color: var(--itz-text); background: var(--itz-surface); border-color: var(--itz-line-strong); border-radius: 3px; box-shadow: 0 5px 14px var(--itz-shadow); backdrop-filter: none; }
 :root[data-theme] .topology-legend__heading { background: var(--itz-surface); border-color: var(--itz-line); }
