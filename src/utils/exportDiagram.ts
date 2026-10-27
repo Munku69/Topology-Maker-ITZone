@@ -66,12 +66,26 @@ export async function exportTopologyPng(projectName: string, nodes: TopologyNode
   anchor.click()
 }
 
-function addFittedDiagram(pdf: jsPDF, rendered: RenderedDiagram, x: number, y: number, width: number, height: number, background: ExportBackground) {
+interface DiagramRect { x: number; y: number; width: number; height: number }
+
+function fittedDiagramRect(rendered: RenderedDiagram, x: number, y: number, width: number, height: number): DiagramRect {
   const ratio = Math.min(width / rendered.width, height / rendered.height)
   const imageWidth = rendered.width * ratio
   const imageHeight = rendered.height * ratio
   const imageX = x + (width - imageWidth) / 2
   const imageY = y + (height - imageHeight) / 2
+  return { x: imageX, y: imageY, width: imageWidth, height: imageHeight }
+}
+
+function rectanglesOverlap(first: DiagramRect, second: DiagramRect, gap = 0): boolean {
+  return first.x < second.x + second.width + gap
+    && first.x + first.width + gap > second.x
+    && first.y < second.y + second.height + gap
+    && first.y + first.height + gap > second.y
+}
+
+function addFittedDiagram(pdf: jsPDF, rendered: RenderedDiagram, x: number, y: number, width: number, height: number, background: ExportBackground) {
+  const { x: imageX, y: imageY, width: imageWidth, height: imageHeight } = fittedDiagramRect(rendered, x, y, width, height)
   if (background === 'white') {
     pdf.setFillColor(255, 255, 255)
     pdf.setDrawColor(202, 212, 219)
@@ -158,6 +172,21 @@ function drawItzoneTemplate(
   const legendRows = Math.ceil(legendItems.length / legendColumns)
   const legendRowHeight = legendColumns === 2 ? 5 : 6
   const legendHeight = Math.min(titleY - margin - 8, Math.max(portrait ? 42 : 36, 14 + legendRows * legendRowHeight))
+  const legendY = titleY - legendHeight - 3
+  const fullDiagramArea: DiagramRect = { x: 8, y: 8, width: pageWidth - 16, height: pageHeight - 16 }
+  const detailsArea: DiagramRect = { x: sideX, y: legendY, width: sideWidth, height: pageHeight - margin - legendY }
+  let diagramArea = fullDiagramArea
+  if (rectanglesOverlap(fittedDiagramRect(rendered, fullDiagramArea.x, fullDiagramArea.y, fullDiagramArea.width, fullDiagramArea.height), detailsArea, 3)) {
+    const safeAreas: DiagramRect[] = [
+      { x: 8, y: 8, width: pageWidth - 16, height: legendY - 11 },
+      { x: 8, y: 8, width: sideX - 11, height: pageHeight - 16 },
+    ]
+    diagramArea = safeAreas.reduce((best, candidate) => {
+      const bestFit = fittedDiagramRect(rendered, best.x, best.y, best.width, best.height)
+      const candidateFit = fittedDiagramRect(rendered, candidate.x, candidate.y, candidate.width, candidate.height)
+      return candidateFit.width * candidateFit.height > bestFit.width * bestFit.height ? candidate : best
+    })
+  }
 
   pdf.setFillColor(255, 255, 255)
   pdf.rect(0, 0, pageWidth, pageHeight, 'F')
@@ -167,22 +196,27 @@ function drawItzoneTemplate(
   pdf.setLineWidth(0.16)
   pdf.rect(4.2, 4.2, pageWidth - 8.4, pageHeight - 8.4)
 
+  // Use the full page whenever it is safe. If the fitted topology would reach
+  // the bottom-right report blocks, choose the larger collision-free region.
+  addFittedDiagram(pdf, rendered, diagramArea.x, diagramArea.y, diagramArea.width, diagramArea.height, background)
+
+  pdf.setFillColor(255, 255, 255)
   pdf.setDrawColor(32, 53, 69)
   pdf.setLineWidth(0.25)
-  pdf.rect(sideX, margin, sideWidth, legendHeight)
+  pdf.rect(sideX, legendY, sideWidth, legendHeight, 'FD')
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(9)
   pdf.setTextColor(15, 41, 60)
-  pdf.text('LEGEND', sideX + 4, margin + 7)
+  pdf.text('LEGEND', sideX + 4, legendY + 7)
   pdf.setDrawColor(193, 205, 214)
-  pdf.line(sideX, margin + 10, sideX + sideWidth, margin + 10)
+  pdf.line(sideX, legendY + 10, sideX + sideWidth, legendY + 10)
 
   legendItems.forEach((item, index) => {
     const column = Math.floor(index / legendRows)
     const row = index % legendRows
     const columnWidth = sideWidth / legendColumns
     const itemX = sideX + column * columnWidth
-    const itemY = margin + 16 + row * legendRowHeight
+    const itemY = legendY + 16 + row * legendRowHeight
     const color = item.color.replace('#', '')
     pdf.setDrawColor(Number.parseInt(color.slice(0, 2), 16), Number.parseInt(color.slice(2, 4), 16), Number.parseInt(color.slice(4, 6), 16))
     pdf.setLineWidth(0.7)
@@ -198,9 +232,10 @@ function drawItzoneTemplate(
     pdf.text(clipped, itemX + (legendColumns === 2 ? 14 : 22), itemY + 2)
   })
 
+  pdf.setFillColor(255, 255, 255)
   pdf.setDrawColor(32, 53, 69)
   pdf.setLineWidth(0.25)
-  pdf.rect(sideX, titleY, sideWidth, titleHeight)
+  pdf.rect(sideX, titleY, sideWidth, titleHeight, 'FD')
   pdf.line(sideX, titleY + 24, sideX + sideWidth, titleY + 24)
   pdf.line(sideX, titleY + 35, sideX + sideWidth, titleY + 35)
   pdf.line(sideX, titleY + 56, sideX + sideWidth, titleY + 56)
@@ -234,20 +269,6 @@ function drawItzoneTemplate(
   pdf.setFont('helvetica', 'normal')
   const authorLine = pdf.splitTextToSize(details.author || '-', sideWidth - 22)[0] ?? '-'
   pdf.text(authorLine, sideX + 19, titleY + 64)
-  pdf.setTextColor(15, 41, 60)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(portrait ? 13 : 15)
-  pdf.text('PHYSICAL NETWORK TOPOLOGY', 10, 14)
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(8)
-  pdf.setTextColor(85, 102, 114)
-  pdf.text(projectName || 'Untitled Network', 10, 20)
-
-  if (portrait) {
-    addFittedDiagram(pdf, rendered, 9, margin + legendHeight + 8, pageWidth - 18, titleY - legendHeight - 18, background)
-  } else {
-    addFittedDiagram(pdf, rendered, 9, 27, sideX - 15, pageHeight - 38, background)
-  }
 }
 
 function drawPageHeader(pdf: jsPDF, title: string, subtitle: string, pageWidth: number) {

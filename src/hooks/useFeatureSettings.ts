@@ -5,24 +5,28 @@ const STORAGE_KEY = 'network-topology-features'
 export interface FeatureSettings {
   showCables: boolean
   portSelection: boolean
-  showDeviceLabels: boolean
+  showDeviceNames: boolean
+  showIpAddresses: boolean
 }
 
 const defaults: FeatureSettings = {
   showCables: true,
   portSelection: false,
-  showDeviceLabels: true,
+  showDeviceNames: true,
+  showIpAddresses: true,
 }
 
 function loadSettings(): FeatureSettings {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY)
     if (!saved) return defaults
-    const value = JSON.parse(saved) as Partial<FeatureSettings>
+    const value = JSON.parse(saved) as Partial<FeatureSettings> & { showDeviceLabels?: boolean }
+    const legacyLabelSetting = typeof value.showDeviceLabels === 'boolean' ? value.showDeviceLabels : true
     return {
       showCables: typeof value.showCables === 'boolean' ? value.showCables : defaults.showCables,
       portSelection: typeof value.portSelection === 'boolean' ? value.portSelection : defaults.portSelection,
-      showDeviceLabels: typeof value.showDeviceLabels === 'boolean' ? value.showDeviceLabels : defaults.showDeviceLabels,
+      showDeviceNames: typeof value.showDeviceNames === 'boolean' ? value.showDeviceNames : legacyLabelSetting,
+      showIpAddresses: typeof value.showIpAddresses === 'boolean' ? value.showIpAddresses : legacyLabelSetting,
     }
   } catch {
     return defaults

@@ -39,7 +39,8 @@ interface TopologyCanvasProps {
   cableStatus: string | null
   showCables: boolean
   portSelection: boolean
-  showDeviceLabels: boolean
+  showDeviceNames: boolean
+  showIpAddresses: boolean
   onAddTextBox: (point: { x: number; y: number }) => void
   onDrawZone: (start: { x: number; y: number }, end: { x: number; y: number }) => void
   onContextAction: (action: CanvasContextAction, target?: TopologyNode | TopologyEdge) => void
@@ -190,7 +191,7 @@ export const TopologyCanvas = forwardRef<HTMLDivElement, TopologyCanvasProps>(fu
   }, [props.edges])
 
   return (
-    <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.textToolMode ? 'text-mode' : ''} ${props.zoneToolMode ? 'zone-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceLabels ? '' : 'labels-hidden'} ${props.portSelection ? 'port-selection-enabled' : ''}`} ref={ref} onPointerMove={(event) => {
+    <main className={`canvas-shell ${props.cableMode ? 'cable-mode' : ''} ${props.deleteMode ? 'delete-mode' : ''} ${props.textToolMode ? 'text-mode' : ''} ${props.zoneToolMode ? 'zone-mode' : ''} ${props.showCables ? '' : 'cables-hidden'} ${props.showDeviceNames ? '' : 'device-names-hidden'} ${props.showIpAddresses ? '' : 'ip-addresses-hidden'} ${props.portSelection ? 'port-selection-enabled' : ''}`} ref={ref} onPointerMove={(event) => {
       if (!activeTool || !cursorBadgeRef.current) return
       cursorBadgeRef.current.style.visibility = 'visible'
       cursorBadgeRef.current.style.transform = `translate3d(${event.clientX + 15}px, ${event.clientY + 17}px, 0)`

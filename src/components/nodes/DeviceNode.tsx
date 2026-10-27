@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Handle, Position, useStore, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, Position, useStore, type NodeProps } from '@xyflow/react'
 import { DEVICE_PRESETS } from '../../constants/devices'
 import { OUTLINE_ATTACHMENTS } from '../../constants/attachments'
 import type { DeviceType, TopologyNode } from '../../types/topology'
@@ -52,11 +52,15 @@ export function getDeviceNodeSize(type: DeviceType): { width: number; height: nu
   return { width: contentWidth * pixelsPerPercent, height: contentHeight * pixelsPerPercent }
 }
 
-function getIconLayout(type: DeviceType): React.CSSProperties {
+function getIconLayout(type: DeviceType, renderedWidth?: number, renderedHeight?: number): React.CSSProperties {
   const [left, top] = ICON_BOUNDS[type] ?? [0, 0, 0, 0]
-  const { width, height } = getDeviceNodeSize(type)
+  const baseSize = getDeviceNodeSize(type)
+  const width = renderedWidth && renderedWidth > 1 ? renderedWidth : baseSize.width
+  const height = renderedHeight && renderedHeight > 1 ? renderedHeight : baseSize.height
   const contentWidth = 100 - (ICON_BOUNDS[type]?.[0] ?? 0) - (ICON_BOUNDS[type]?.[2] ?? 0)
-  const pixelsPerPercent = width / contentWidth
+  const basePixelsPerPercent = baseSize.width / contentWidth
+  const scale = Math.min(width / baseSize.width, height / baseSize.height)
+  const pixelsPerPercent = basePixelsPerPercent * scale
   return {
     '--node-width': `${width}px`,
     '--node-height': `${height}px`,
@@ -66,7 +70,7 @@ function getIconLayout(type: DeviceType): React.CSSProperties {
   } as React.CSSProperties
 }
 
-function DeviceNodeView({ id, data, selected }: NodeProps<TopologyNode>) {
+function DeviceNodeView({ id, data, selected, width, height }: NodeProps<TopologyNode>) {
   const preset = DEVICE_PRESETS[data.deviceType]
   const isConnected = useStore((state) => state.edges.some((edge) => edge.source === id || edge.target === id))
   if (data.deviceType === 'text-box') {
@@ -81,9 +85,21 @@ function DeviceNodeView({ id, data, selected }: NodeProps<TopologyNode>) {
       </div>
     )
   }
-  const layout = getIconLayout(data.deviceType)
+  const baseSize = getDeviceNodeSize(data.deviceType)
+  const layout = getIconLayout(data.deviceType, width, height)
   return (
     <div className={`device-node ${selected ? 'is-selected' : ''}`} style={{ '--node-accent': preset.accent, ...layout } as React.CSSProperties}>
+      <NodeResizer
+        isVisible={selected}
+        keepAspectRatio
+        minWidth={baseSize.width * 0.45}
+        minHeight={baseSize.height * 0.45}
+        maxWidth={baseSize.width * 2}
+        maxHeight={baseSize.height * 2}
+        color={preset.accent}
+        handleClassName="device-resize-handle"
+        lineClassName="device-resize-line"
+      />
       <div className="device-node__visual">
         {OUTLINE_ATTACHMENTS.map((attachment) => <Handle
           key={attachment.id}

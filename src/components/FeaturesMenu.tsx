@@ -1,13 +1,15 @@
-import { Cable, EthernetPort, Tags, SlidersHorizontal } from 'lucide-react'
+import { Cable, EthernetPort, Network, Tags, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 interface FeaturesMenuProps {
   showCables: boolean
   portSelection: boolean
-  showDeviceLabels: boolean
+  showDeviceNames: boolean
+  showIpAddresses: boolean
   onShowCablesChange: (value: boolean) => void
   onPortSelectionChange: (value: boolean) => void
-  onShowDeviceLabelsChange: (value: boolean) => void
+  onShowDeviceNamesChange: (value: boolean) => void
+  onShowIpAddressesChange: (value: boolean) => void
 }
 
 function FeatureToggle({ icon, title, description, checked, onChange }: {
@@ -53,7 +55,8 @@ export function FeaturesMenu(props: FeaturesMenuProps) {
       <div className="features-menu__panel">
         <div className="features-menu__heading"><p className="eyebrow">Workspace</p><strong>Features</strong></div>
         <FeatureToggle icon={<Cable size={17} />} title="Show cables" description="Display links on the canvas" checked={props.showCables} onChange={props.onShowCablesChange} />
-        <FeatureToggle icon={<Tags size={17} />} title="Device labels" description="Show names and IP addresses" checked={props.showDeviceLabels} onChange={props.onShowDeviceLabelsChange} />
+        <FeatureToggle icon={<Tags size={17} />} title="Device names" description="Show device names below icons" checked={props.showDeviceNames} onChange={props.onShowDeviceNamesChange} />
+        <FeatureToggle icon={<Network size={17} />} title="IP addresses" description="Show management IP addresses" checked={props.showIpAddresses} onChange={props.onShowIpAddressesChange} />
         <FeatureToggle icon={<EthernetPort size={17} />} title="Choose ports" description="Ask for a port at each endpoint" checked={props.portSelection} onChange={props.onPortSelectionChange} />
         <p className="features-menu__note">Preferences are saved in this browser.</p>
       </div>

@@ -2,17 +2,20 @@ import { Cable, Check, CircleOff, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { CABLE_PRESETS } from '../constants/cables'
 import type { CableType, TopologyNode } from '../types/topology'
+import type { SmartConnectionSuggestion } from '../utils/automation'
 
 interface PortSelectionDialogProps {
   node: TopologyNode | null
   stage: 'first' | 'second'
   cableType: CableType | null
   usedInterfaces: Set<string>
+  suggestion?: SmartConnectionSuggestion | null
+  onApplySuggestion?: (suggestion: SmartConnectionSuggestion) => void
   onCancel: () => void
   onConfirm: (interfaceName: string) => void
 }
 
-export function PortSelectionDialog({ node, stage, cableType, usedInterfaces, onCancel, onConfirm }: PortSelectionDialogProps) {
+export function PortSelectionDialog({ node, stage, cableType, usedInterfaces, suggestion, onApplySuggestion, onCancel, onConfirm }: PortSelectionDialogProps) {
   const availableInterfaces = useMemo(() => node?.data.interfaces.filter((item) => item.name.trim() && !usedInterfaces.has(item.name)) ?? [], [node, usedInterfaces])
   const [selectedInterface, setSelectedInterface] = useState('')
 
@@ -32,6 +35,12 @@ export function PortSelectionDialog({ node, stage, cableType, usedInterfaces, on
           <div><p className="eyebrow">{stage === 'first' ? 'First endpoint' : 'Second endpoint'} · {cable.shortLabel}</p><h2 id="port-dialog-title">Choose a port on {node.data.name}</h2></div>
         </div>
         <p className="port-dialog__help">Only unused, named interfaces are available for a new cable.</p>
+
+        {suggestion && stage === 'second' && <div className="smart-connection-suggestion">
+          <span><strong>Smart suggestion</strong><small>{suggestion.reason}</small></span>
+          <code>{CABLE_PRESETS[suggestion.cableType].shortLabel} · {suggestion.purpose} · {suggestion.speed.replace(' Gbps', 'G').replace(' Mbps', 'M')}{suggestion.sourceInterface || suggestion.targetInterface ? ` · ${suggestion.sourceInterface || 'Auto'} ↔ ${suggestion.targetInterface || 'Auto'}` : ''}</code>
+          <button className="button button--small" onClick={() => { onApplySuggestion?.(suggestion); if (suggestion.targetInterface && availableInterfaces.some((item) => item.name === suggestion.targetInterface)) setSelectedInterface(suggestion.targetInterface) }}>Use suggestion</button>
+        </div>}
 
         <div className="port-list">
           {node.data.interfaces.map((item) => {

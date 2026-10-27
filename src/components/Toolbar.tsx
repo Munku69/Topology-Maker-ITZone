@@ -18,6 +18,8 @@ interface ToolbarProps {
   onExportPng: () => void
   onLoadDemo: () => void
   onArrange: () => void
+  onOpenWizard: () => void
+  onOpenLayouts: () => void
   onFit: () => void
   canUndo: boolean
   canRedo: boolean
@@ -35,10 +37,12 @@ interface ToolbarProps {
   onToggleTheme: () => void
   showCables: boolean
   portSelection: boolean
-  showDeviceLabels: boolean
+  showDeviceNames: boolean
+  showIpAddresses: boolean
   onShowCablesChange: (value: boolean) => void
   onPortSelectionChange: (value: boolean) => void
-  onShowDeviceLabelsChange: (value: boolean) => void
+  onShowDeviceNamesChange: (value: boolean) => void
+  onShowIpAddressesChange: (value: boolean) => void
 }
 
 export function Toolbar(props: ToolbarProps) {
@@ -70,7 +74,8 @@ export function Toolbar(props: ToolbarProps) {
         <div className="export-menu automation-menu">
           <button className="toolbar-button" title="Topology automation"><Sparkles size={16} /><span>Automate</span><ChevronDown size={14} /></button>
           <div className="export-menu__panel">
-            <button onClick={props.onArrange}><LayoutGrid size={16} /><span><strong>Arrange topology</strong><small>Organize selected devices or the full canvas</small></span></button>
+            <button onClick={props.onOpenWizard}><Sparkles size={16} /><span><strong>Build topology wizard</strong><small>Create a complete network from a few questions</small></span></button>
+            <button onClick={props.onOpenLayouts}><LayoutGrid size={16} /><span><strong>Smart layout</strong><small>Choose a layout preset and lock devices</small></span></button>
             <button onClick={props.onOpenTemplates}><Sparkles size={16} /><span><strong>Topology templates</strong><small>Create a ready-to-edit network</small></span></button>
             <button onClick={props.onZoneSelection}><SquareDashed size={16} /><span><strong>Zone selection</strong><small>Wrap selected devices in a zone</small></span></button>
             <button onClick={props.onOpenValidation}><ListChecks size={16} /><span><strong>Validate topology</strong><small>{props.issueCount ? `${props.issueCount} issue${props.issueCount === 1 ? '' : 's'} found` : 'No current issues'}</small></span></button>
@@ -79,7 +84,7 @@ export function Toolbar(props: ToolbarProps) {
         <button className="toolbar-button" onClick={props.onFit} title="Fit and center the complete topology"><Maximize2 size={16} /><span>Fit</span></button>
         <button className="toolbar-button demo-button" onClick={props.onLoadDemo} title="Load the example topology">Example</button>
       </nav>
-      <FeaturesMenu showCables={props.showCables} portSelection={props.portSelection} showDeviceLabels={props.showDeviceLabels} onShowCablesChange={props.onShowCablesChange} onPortSelectionChange={props.onPortSelectionChange} onShowDeviceLabelsChange={props.onShowDeviceLabelsChange} />
+      <FeaturesMenu showCables={props.showCables} portSelection={props.portSelection} showDeviceNames={props.showDeviceNames} showIpAddresses={props.showIpAddresses} onShowCablesChange={props.onShowCablesChange} onPortSelectionChange={props.onPortSelectionChange} onShowDeviceNamesChange={props.onShowDeviceNamesChange} onShowIpAddressesChange={props.onShowIpAddressesChange} />
       <button className="icon-button theme-toggle" onClick={props.onToggleTheme} title={`Switch to ${props.theme === 'dark' ? 'light' : 'dark'} mode`} aria-label={`Switch to ${props.theme === 'dark' ? 'light' : 'dark'} mode`}>
         {props.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
       </button>
